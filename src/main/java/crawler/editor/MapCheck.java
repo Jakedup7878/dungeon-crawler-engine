@@ -10,6 +10,7 @@ import crawler.render.AssetSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Things worth knowing about a map before you play it: floor count, which cells the party
@@ -24,6 +25,14 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
     private static final int MAX_LISTED = 3;
 
     static MapCheck of(DungeonMap map, AssetSource assets) {
+        return of(map, assets, null);
+    }
+
+    /**
+     * @param knownEnemies ids of the project's enemies, to point out encounters and event battles
+     *                     naming enemies that don't exist; null to skip that check
+     */
+    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies) {
         int width = map.width();
         int height = map.height();
         List<String> problems = new ArrayList<>();
@@ -85,13 +94,34 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
         }
         addSome(problems, stuck, "objects like that");
 
+        if (knownEnemies != null) {
+            List<String> unknown = new ArrayList<>();
+            for (String id : map.encounters().enemies()) {
+                if (!knownEnemies.contains(id)) {
+                    unknown.add("Random battles name an enemy that doesn't exist: " + id + " (see Project > Enemies).");
+                }
+            }
+            for (MapObject object : map.objects()) {
+                for (String id : object.battle()) {
+                    if (!knownEnemies.contains(id)) {
+                        unknown.add("The event at " + object.x() + ", " + object.y() + " has a battle with an enemy that "
+                                + "doesn't exist: " + id + ".");
+                    }
+                }
+            }
+            addSome(problems, unknown, "unknown enemies");
+        }
+        if (map.encounters().rate() > 0 && map.encounters().enemies().isEmpty()) {
+            problems.add("Random battles are switched on, but no enemies are chosen (Edit > Map Settings).");
+        }
+
         List<String> missing = new ArrayList<>();
         for (String reference : map.assetReferences()) {
-            if (assets.image(reference) == null) {
-                missing.add("Can't find the image " + reference + ", so the built-in look is used.");
+            if (assets.data(reference) == null && assets.image(reference) == null) {
+                missing.add("Can't find the file " + reference + ". Pictures fall back to the built-in look; sounds stay silent.");
             }
         }
-        addSome(problems, missing, "missing images");
+        addSome(problems, missing, "missing files");
 
         return new MapCheck(floor, reachable, doors, counts[ObjectType.EVENT.ordinal()],
                 counts[ObjectType.CHEST.ordinal()], counts[ObjectType.NPC.ordinal()],

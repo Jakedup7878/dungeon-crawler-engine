@@ -5,6 +5,7 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -54,6 +55,43 @@ public final class Sprite {
     /** An animation that loops through equally sized frames. */
     public static Sprite animated(List<BufferedImage> frames, double framesPerSecond) {
         return new Sprite(frames, framesPerSecond);
+    }
+
+    /**
+     * An animation from a strip: {@code frames} pictures side by side, left to right, all the
+     * same width. A strip of 1 frame is a still picture. Big frames are scaled down.
+     */
+    public static Sprite strip(BufferedImage image, int frames, double framesPerSecond) {
+        int count = Math.max(1, Math.min(frames, image.getWidth()));
+        if (count == 1) {
+            return of(image);
+        }
+        int frameWidth = image.getWidth() / count;
+        int height = image.getHeight();
+        double factor = Math.min(1.0, MAX_SIZE / (double) Math.max(frameWidth, height));
+        int outWidth = Math.max(1, (int) Math.round(frameWidth * factor));
+        int outHeight = Math.max(1, (int) Math.round(height * factor));
+        List<BufferedImage> pictures = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            // Copy each frame: a sub-image would share the whole strip's pixels.
+            BufferedImage frame = new BufferedImage(frameWidth, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = frame.createGraphics();
+            g.drawImage(image.getSubimage(i * frameWidth, 0, frameWidth, height), 0, 0, null);
+            g.dispose();
+            pictures.add(factor < 1 ? scale(frame, outWidth, outHeight, BufferedImage.TYPE_INT_ARGB) : frame);
+        }
+        return new Sprite(pictures, framesPerSecond);
+    }
+
+    /** How long one pass through all the frames takes, in seconds. */
+    public double duration() {
+        return framesPerSecond <= 0 ? 0 : frames.length / framesPerSecond;
+    }
+
+    /** The frame for a time, without looping: the last frame once the animation is over. */
+    public BufferedImage imageOnce(double seconds) {
+        int index = framesPerSecond <= 0 ? 0 : (int) Math.floor(seconds * framesPerSecond);
+        return frames[Math.max(0, Math.min(frames.length - 1, index))];
     }
 
     public int frameCount() {

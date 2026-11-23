@@ -1,5 +1,7 @@
 package crawler.editor;
 
+import crawler.core.SpriteRef;
+
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -9,6 +11,8 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -22,7 +26,10 @@ import java.nio.file.Path;
 
 /**
  * A thumbnail with "Choose image..." and "Use built-in" buttons, for picking one of the
- * map's images. Chosen files are imported into the {@link AssetStore}.
+ * game's pictures. Chosen files are imported into the {@link AssetStore}.
+ *
+ * <p>An animatable picker also has Frames and Speed boxes, for animation strips: the frames
+ * side by side in one image, left to right (see {@link SpriteRef}).
  */
 final class ImagePicker extends JPanel {
     private static final int THUMB = 72;
@@ -35,18 +42,28 @@ final class ImagePicker extends JPanel {
     private final JLabel thumbnail = new JLabel();
     private final JLabel caption = new JLabel();
     private final JButton useDefault = new JButton("Use built-in");
+    private final JSpinner frames = new JSpinner(new SpinnerNumberModel(1, 1, SpriteRef.MAX_FRAMES, 1));
+    private final JSpinner fps = new JSpinner(new SpinnerNumberModel(SpriteRef.DEFAULT_FPS, 1.0, 60.0, 1.0));
+    private final boolean animatable;
     private String reference;
+
+    /** A picker for a still picture, such as a texture. */
+    ImagePicker(AssetStore assets, String reference, BufferedImage defaultImage, String defaultCaption) {
+        this(assets, reference, defaultImage, defaultCaption, false);
+    }
 
     /**
      * @param reference      the image chosen now, or null for the built-in look
      * @param defaultImage   the built-in look, or null if there is none to show
      * @param defaultCaption describes the built-in look
+     * @param animatable     whether to offer Frames and Speed for animation strips
      */
-    ImagePicker(AssetStore assets, String reference, BufferedImage defaultImage, String defaultCaption) {
+    ImagePicker(AssetStore assets, String reference, BufferedImage defaultImage, String defaultCaption, boolean animatable) {
         super(new BorderLayout(10, 0));
         this.assets = assets;
         this.defaultImage = defaultImage;
         this.defaultCaption = defaultCaption;
+        this.animatable = animatable;
 
         thumbnail.setPreferredSize(new Dimension(THUMB + 4, THUMB + 4));
         thumbnail.setBorder(BorderFactory.createLineBorder(new Color(90, 96, 112)));
@@ -58,12 +75,7 @@ final class ImagePicker extends JPanel {
             useDefault.setText("Remove image"); // there's no built-in picture to go back to
         }
         useDefault.addActionListener(e -> set(null));
-        JPanel buttons = new JPanel();
-        buttons.setLayout(new BoxLayout(buttons, BoxLayout.X_AXIS));
-        buttons.add(choose);
-        buttons.add(Box.createHorizontalStrut(6));
-        buttons.add(useDefault);
-        buttons.setAlignmentX(LEFT_ALIGNMENT);
+        JPanel buttons = row(choose, Box.createHorizontalStrut(6), useDefault);
         caption.setAlignmentX(LEFT_ALIGNMENT);
 
         JPanel right = new JPanel();
@@ -72,9 +84,32 @@ final class ImagePicker extends JPanel {
         right.add(caption);
         right.add(Box.createVerticalStrut(6));
         right.add(buttons);
+        if (animatable) {
+            ((JSpinner.DefaultEditor) frames.getEditor()).getTextField().setColumns(3);
+            ((JSpinner.DefaultEditor) fps.getEditor()).getTextField().setColumns(3);
+            frames.setToolTipText("How many frames the image holds, side by side, left to right. 1 = a still picture.");
+            fps.setToolTipText("Frames per second");
+            frames.addChangeListener(e -> refresh());
+            right.add(Box.createVerticalStrut(6));
+            right.add(row(new JLabel("Frames "), frames, Box.createHorizontalStrut(10), new JLabel("Speed "), fps,
+                    new JLabel(" fps")));
+        }
         right.add(Box.createVerticalGlue());
         add(right, BorderLayout.CENTER);
         set(reference);
+    }
+
+    private static JPanel row(java.awt.Component... parts) {
+        JPanel row = new JPanel();
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        for (java.awt.Component part : parts) {
+            if (part instanceof JSpinner) {
+                part.setMaximumSize(part.getPreferredSize()); // don't stretch across a wide dialog
+            }
+            row.add(part);
+        }
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        return row;
     }
 
     /** The chosen image's reference, or null for the built-in look. */
@@ -82,19 +117,49 @@ final class ImagePicker extends JPanel {
         return reference;
     }
 
-    /** Shows another image (null = the built-in look), for forms that edit one thing after another. */
+    /** The chosen picture with its frames and speed, or null for the built-in look. */
+    SpriteRef sprite() {
+        if (reference == null) {
+            return null;
+        }
+        return new SpriteRef(reference, StatFields.value(frames), ((Number) fps.getValue()).doubleValue());
+    }
+
+    /** Shows another picture (null = the built-in look), for forms that edit one thing after another. */
+    void setSprite(SpriteRef sprite) {
+        frames.setValue(sprite == null ? 1 : sprite.frames());
+        fps.setValue(sprite == null ? SpriteRef.DEFAULT_FPS : sprite.fps());
+        set(sprite == null ? null : sprite.image());
+    }
+
+    /** Shows another image (null = the built-in look). */
     void set(String newReference) {
         reference = newReference;
+        refresh();
+    }
+
+    private void refresh() {
         BufferedImage image = reference == null ? defaultImage : assets.image(reference);
-        thumbnail.setIcon(new ImageIcon(thumbnail(image)));
+        int frameCount = animatable && reference != null ? (Integer) frames.getValue() : 1;
+        thumbnail.setIcon(new ImageIcon(thumbnail(firstFrame(image, frameCount))));
         if (reference == null) {
             caption.setText(defaultCaption);
         } else if (image == null) {
             caption.setText("<html>" + reference + "<br><font color='#c03030'>missing: the built-in look is used</font></html>");
         } else {
-            caption.setText(reference + "   (" + image.getWidth() + " x " + image.getHeight() + ")");
+            caption.setText(reference + "   (" + image.getWidth() + " x " + image.getHeight()
+                    + (frameCount > 1 ? ", " + frameCount + " frames" : "") + ")");
         }
         useDefault.setEnabled(reference != null);
+        frames.setEnabled(reference != null);
+        fps.setEnabled(reference != null);
+    }
+
+    private static BufferedImage firstFrame(BufferedImage image, int frameCount) {
+        if (image == null || frameCount <= 1 || image.getWidth() < frameCount) {
+            return image;
+        }
+        return image.getSubimage(0, 0, image.getWidth() / frameCount, image.getHeight());
     }
 
     private void choose() {

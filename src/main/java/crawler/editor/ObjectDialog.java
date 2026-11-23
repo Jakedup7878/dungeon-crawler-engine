@@ -1,5 +1,6 @@
 package crawler.editor;
 
+import crawler.core.Encounters;
 import crawler.core.MapObject;
 import crawler.core.ObjectType;
 import crawler.render.ObjectLooks;
@@ -17,28 +18,40 @@ import javax.swing.event.AncestorListener;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
-/** Edits an event, chest or NPC: its name, its text and its images. */
+/** Edits an event, chest or NPC: its name, its text, its pictures and (for events) a battle. */
 final class ObjectDialog {
     private ObjectDialog() {
     }
 
-    /** Shows the dialog; returns the edited object, or null if cancelled. */
-    static MapObject show(Component parent, MapObject object, boolean isNew, AssetStore assets) {
+    /**
+     * Shows the dialog; returns the edited object, or null if cancelled.
+     *
+     * @param looks    the game's looks, so the built-in pictures shown are the project's defaults
+     * @param enemyIds the enemy ids the project knows, to suggest for event battles (may be empty)
+     */
+    static MapObject show(Component parent, MapObject object, boolean isNew, AssetStore assets,
+                          ObjectLooks looks, List<String> enemyIds) {
         ObjectType type = object.type();
         JTextField name = new JTextField(object.name(), 28);
         JTextArea text = new JTextArea(object.text(), 6, 36);
         text.setLineWrap(true);
         text.setWrapStyleWord(true);
         JCheckBox once = new JCheckBox("Only the first time the party steps here", object.once());
-        ImagePicker sprite = new ImagePicker(assets, object.sprite(), defaultImage(type, false), switch (type) {
+        JTextField battle = new JTextField(String.join(", ", object.battle()), 28);
+        ImagePicker sprite = new ImagePicker(assets, null, defaultImage(type, false, looks), switch (type) {
             case EVENT -> "None: the event can't be seen";
-            case CHEST -> "Built-in chest";
-            case NPC -> "Built-in spinning blue top";
-        });
-        ImagePicker opened = type != ObjectType.CHEST ? null
-                : new ImagePicker(assets, object.openSprite(), defaultImage(type, true),
-                "Built-in open chest (or the closed image, if you chose one)");
+            case CHEST -> "The game's chest";
+            case NPC -> "The game's NPC look";
+        }, true);
+        sprite.setSprite(object.sprite());
+        ImagePicker opened = null;
+        if (type == ObjectType.CHEST) {
+            opened = new ImagePicker(assets, null, defaultImage(type, true, looks),
+                    "The game's open chest (or the closed picture, if you chose one)", true);
+            opened.setSprite(object.openSprite());
+        }
 
         JPanel form = switch (type) {
             case EVENT -> MapDialogs.form(
@@ -46,22 +59,27 @@ final class ObjectDialog {
                     new JLabel("Message"), new JScrollPane(text),
                     new JLabel(), hint("Shown when the party steps onto this cell. Leave the title empty for none."),
                     new JLabel(), once,
-                    new JLabel("Image"), sprite,
-                    new JLabel(), hint("Give an event an image to make it visible, like a fountain or a sign."));
+                    new JLabel("Battle"), battle,
+                    new JLabel(), hint(enemyIds.isEmpty()
+                            ? "Enemy ids to fight here, comma separated (a boss, say). Make enemies in Project > Enemies."
+                            : "Enemy ids to fight here, comma separated, such as " + String.join(", ",
+                            enemyIds.subList(0, Math.min(3, enemyIds.size()))) + ". Leave empty for no battle."),
+                    new JLabel("Picture"), sprite,
+                    new JLabel(), hint("Give an event a picture to make it visible, like a fountain or a sign."));
             case CHEST -> MapDialogs.form(
                     new JLabel("Name"), name,
                     new JLabel("Contents"), new JScrollPane(text),
                     new JLabel(), hint("Shown when the party opens the chest. Empty means an empty chest."),
-                    new JLabel("Closed image"), sprite,
-                    new JLabel("Opened image"), opened);
+                    new JLabel("Closed"), sprite,
+                    new JLabel("Opened"), opened);
             case NPC -> MapDialogs.form(
                     new JLabel("Name"), name,
                     new JLabel("Dialogue"), new JScrollPane(text),
                     new JLabel(), hint("What they say when the party walks up to them. Long text is shown a page at a time."),
-                    new JLabel("Image"), sprite);
+                    new JLabel("Picture"), sprite);
         };
-        String note = "Images are copied into an 'assets' folder next to the map when you save. "
-                + "PNGs with a transparent background look best.";
+        String note = "Pictures are copied into the 'assets' folder when you save. PNGs with a transparent "
+                + "background look best. For an animation, put the frames side by side in one image and set Frames.";
         focusWhenShown(name);
         String title = (isNew ? "New " : "") + type.displayName + " at " + object.x() + ", " + object.y();
         int answer = JOptionPane.showConfirmDialog(parent, new Object[]{form, hint(note)}, title,
@@ -70,14 +88,15 @@ final class ObjectDialog {
             return null;
         }
         return new MapObject(type, object.x(), object.y(), name.getText(), text.getText(),
-                sprite.reference(), opened == null ? null : opened.reference(), once.isSelected());
+                sprite.sprite(), opened == null ? null : opened.sprite(), once.isSelected(),
+                Encounters.parseIds(battle.getText()));
     }
 
-    private static BufferedImage defaultImage(ObjectType type, boolean open) {
+    private static BufferedImage defaultImage(ObjectType type, boolean open, ObjectLooks looks) {
         return switch (type) {
             case EVENT -> null;
-            case CHEST -> ObjectLooks.defaultChest(open).image(0);
-            case NPC -> ObjectLooks.defaultNpc().image(0);
+            case CHEST -> looks.chest(open).image(0);
+            case NPC -> looks.npc().image(0);
         };
     }
 
@@ -87,7 +106,7 @@ final class ObjectDialog {
         return label;
     }
 
-    private static void focusWhenShown(JComponent field) {
+    static void focusWhenShown(JComponent field) {
         field.addAncestorListener(new AncestorListener() {
             @Override
             public void ancestorAdded(AncestorEvent event) {

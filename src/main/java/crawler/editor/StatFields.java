@@ -8,22 +8,37 @@ import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import java.text.ParseException;
 
-/** Number boxes for HP, MP, attack, defense and speed, shared by the party and enemy forms. */
+/**
+ * Number boxes for HP, MP, attack, defense and speed, shared by the party, class and enemy
+ * forms. A growth set (how much a class gains per level) allows 0 HP.
+ */
 final class StatFields {
-    private final JSpinner hp = spinner(1, Stats.MAX_POINTS);
+    private final boolean growth;
+    private final JSpinner hp;
     private final JSpinner mp = spinner(0, Stats.MAX_POINTS);
     private final JSpinner attack = spinner(0, Stats.MAX_RATING);
     private final JSpinner defense = spinner(0, Stats.MAX_RATING);
     private final JSpinner speed = spinner(0, Stats.MAX_RATING);
 
+    StatFields() {
+        this(false);
+    }
+
+    /** @param growth true for "per level" numbers */
+    StatFields(boolean growth) {
+        this.growth = growth;
+        this.hp = spinner(growth ? 0 : 1, Stats.MAX_POINTS);
+    }
+
     /** Label / field pairs, for {@link MapDialogs#form}. */
     JComponent[] rows() {
+        String after = growth ? " per level" : "";
         return new JComponent[]{
-                new JLabel("HP"), hp,
-                new JLabel("MP"), mp,
-                new JLabel("Attack"), attack,
-                new JLabel("Defense"), defense,
-                new JLabel("Speed"), speed};
+                new JLabel("HP" + after), hp,
+                new JLabel("MP" + after), mp,
+                new JLabel("Attack" + after), attack,
+                new JLabel("Defense" + after), defense,
+                new JLabel("Speed" + after), speed};
     }
 
     void show(Stats stats) {
@@ -51,6 +66,6 @@ final class StatFields {
         } catch (ParseException e) {
             // Not a number: keep the last good value.
         }
-        return (Integer) spinner.getValue();
+        return ((Number) spinner.getValue()).intValue();
     }
 }

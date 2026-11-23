@@ -52,6 +52,16 @@ public final class MapWriter {
                 field(out, surface.key, map.texture(surface));
             }
         }
+        Encounters encounters = map.encounters();
+        if (map.music() != null || !encounters.equals(Encounters.NONE)) {
+            out.append("\n[settings]\n");
+            field(out, "music", map.music());
+            if (!encounters.equals(Encounters.NONE)) {
+                field(out, "encounters", String.join(", ", encounters.enemies()));
+                field(out, "encounter_rate", Integer.toString(encounters.rate()));
+                field(out, "group", encounters.groupText());
+            }
+        }
         for (MapObject object : map.objects()) {
             out.append("\n[").append(object.type().key).append(' ')
                     .append(object.x()).append(',').append(object.y()).append("]\n");
@@ -61,6 +71,7 @@ public final class MapWriter {
                     field(out, "text", object.text());
                     field(out, "once", object.once() ? "yes" : "no");
                     field(out, "sprite", object.sprite());
+                    field(out, "battle", String.join(", ", object.battle()));
                 }
                 case CHEST -> {
                     field(out, "contents", object.text());
@@ -76,10 +87,10 @@ public final class MapWriter {
         return out.toString();
     }
 
-    /** Writes {@code key = value}, skipping empty values. */
-    private static void field(StringBuilder out, String key, String value) {
-        if (value != null && !value.isBlank()) {
-            out.append(key).append(" = ").append(escape(value)).append('\n');
+    /** Writes {@code key = value}, skipping empty values. Sprites are written in their text form. */
+    private static void field(StringBuilder out, String key, Object value) {
+        if (value != null && !value.toString().isBlank()) {
+            out.append(key).append(" = ").append(escape(value.toString())).append('\n');
         }
     }
 

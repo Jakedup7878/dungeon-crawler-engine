@@ -28,11 +28,13 @@ public final class GameProject {
     private String name;
     /** The first map, relative to the root, with forward slashes. */
     private String startMap;
+    private ProjectSettings settings;
 
-    private GameProject(Path root, String name, String startMap) {
+    private GameProject(Path root, String name, String startMap, ProjectSettings settings) {
         this.root = root.toAbsolutePath().normalize();
         this.name = name;
         this.startMap = startMap;
+        this.settings = settings;
     }
 
     /** Whether a folder holds a project. */
@@ -50,7 +52,7 @@ public final class GameProject {
         }
         Files.createDirectories(root.resolve(MAPS));
         Files.createDirectories(root.resolve(ASSETS));
-        GameProject project = new GameProject(root, name.strip(), MAPS + "/b1f.txt");
+        GameProject project = new GameProject(root, name.strip(), MAPS + "/b1f.txt", ProjectSettings.DEFAULT);
         project.save();
         return project;
     }
@@ -60,27 +62,66 @@ public final class GameProject {
         List<String> lines = Files.readAllLines(root.resolve(FILE_NAME), StandardCharsets.UTF_8);
         String name = root.toAbsolutePath().getFileName().toString();
         String start = null;
+        ProjectSettings d = ProjectSettings.DEFAULT;
+        SpriteRef npc = d.npcSprite();
+        SpriteRef chest = d.chestSprite();
+        SpriteRef chestOpen = d.chestOpenSprite();
+        String battleMusic = d.battleMusic();
+        String victoryMusic = d.victoryMusic();
+        boolean partyCreation = d.partyCreation();
+        int partySize = d.partySize();
+        int startingGold = d.startingGold();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).strip();
             if (line.isEmpty() || line.startsWith(";")) {
                 continue;
             }
             int eq = line.indexOf('=');
+            String where = FILE_NAME + ", line " + (i + 1) + ": ";
             if (eq <= 0) {
-                throw new IOException(FILE_NAME + ", line " + (i + 1) + ": expected 'key = value'");
+                throw new IOException(where + "expected 'key = value'");
             }
             String key = line.substring(0, eq).strip().toLowerCase();
             String value = line.substring(eq + 1).strip();
             switch (key) {
                 case "name" -> name = value;
                 case "start" -> start = value;
-                default -> throw new IOException(FILE_NAME + ", line " + (i + 1) + ": unknown setting '" + key + "'");
+                case "npc_sprite" -> npc = SpriteRef.parse(value);
+                case "chest_sprite" -> chest = SpriteRef.parse(value);
+                case "chest_open_sprite" -> chestOpen = SpriteRef.parse(value);
+                case "battle_music" -> battleMusic = value;
+                case "victory_music" -> victoryMusic = value;
+                case "party_creation" -> partyCreation = yesNo(value, where + "party_creation should be yes or no");
+                case "party_size" -> partySize = number(value, 1, ProjectSettings.MAX_PARTY, where + "party_size");
+                case "starting_gold" -> startingGold = number(value, 0, ProjectSettings.MAX_GOLD, where + "starting_gold");
+                default -> throw new IOException(where + "unknown setting '" + key + "'");
             }
         }
         if (start == null) {
             throw new IOException(FILE_NAME + " doesn't say which map to start on (start = maps/b1f.txt)");
         }
-        return new GameProject(root, name, start);
+        return new GameProject(root, name, start, new ProjectSettings(npc, chest, chestOpen,
+                battleMusic, victoryMusic, partyCreation, partySize, startingGold));
+    }
+
+    private static boolean yesNo(String value, String error) throws IOException {
+        return switch (value.toLowerCase()) {
+            case "yes", "true" -> true;
+            case "no", "false" -> false;
+            default -> throw new IOException(error);
+        };
+    }
+
+    private static int number(String value, int min, int max, String what) throws IOException {
+        try {
+            int n = Integer.parseInt(value);
+            if (n >= min && n <= max) {
+                return n;
+            }
+        } catch (NumberFormatException e) {
+            // reported below
+        }
+        throw new IOException(what + " should be a whole number from " + min + " to " + max);
     }
 
     /** The project a file belongs to: the nearest folder above it with a project.txt, or null. */
@@ -94,10 +135,33 @@ public final class GameProject {
     }
 
     public void save() throws IOException {
-        String text = "; A Dungeon Crawler game. Paths are relative to this folder.\n"
-                + "name = " + name.replaceAll("[\\r\\n]+", " ") + "\n"
-                + "start = " + startMap + "\n";
-        Files.writeString(root.resolve(FILE_NAME), text, StandardCharsets.UTF_8);
+        StringBuilder text = new StringBuilder("; A Dungeon Crawler game. Paths are relative to this folder.\n")
+                .append("name = ").append(name.replaceAll("[\\r\\n]+", " ")).append('\n')
+                .append("start = ").append(startMap).append('\n');
+        ProjectSettings s = settings;
+        setting(text, "npc_sprite", s.npcSprite());
+        setting(text, "chest_sprite", s.chestSprite());
+        setting(text, "chest_open_sprite", s.chestOpenSprite());
+        setting(text, "battle_music", s.battleMusic());
+        setting(text, "victory_music", s.victoryMusic());
+        setting(text, "party_creation", s.partyCreation() ? "yes" : "no");
+        setting(text, "party_size", s.partySize());
+        setting(text, "starting_gold", s.startingGold());
+        Files.writeString(root.resolve(FILE_NAME), text.toString(), StandardCharsets.UTF_8);
+    }
+
+    private static void setting(StringBuilder text, String key, Object value) {
+        if (value != null) {
+            text.append(key).append(" = ").append(value).append('\n');
+        }
+    }
+
+    public ProjectSettings settings() {
+        return settings;
+    }
+
+    public void setSettings(ProjectSettings settings) {
+        this.settings = java.util.Objects.requireNonNull(settings);
     }
 
     public Path root() {

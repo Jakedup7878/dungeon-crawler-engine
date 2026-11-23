@@ -1,0 +1,55 @@
+; Classes party members can belong to. Stats are for level 1; growth_ is added
+; at every level up. animation is the id of an attack animation (none here, so
+; the built-in slash is used).
+
+[class fighter]
+name = Fighter
+hp = 32
+mp = 0
+attack = 9
+defense = 7
+speed = 5
+growth_hp = 8
+growth_mp = 0
+growth_attack = 3
+growth_defense = 2
+growth_speed = 1
+
+[class mage]
+name = Mage
+hp = 18
+mp = 20
+attack = 4
+defense = 3
+speed = 6
+growth_hp = 4
+growth_mp = 5
+growth_attack = 1
+growth_defense = 1
+growth_speed = 1
+
+[class priest]
+name = Priest
+hp = 24
+mp = 14
+attack = 6
+defense = 6
+speed = 4
+growth_hp = 6
+growth_mp = 4
+growth_attack = 2
+growth_defense = 2
+growth_speed = 1
+
+[class thief]
+name = Thief
+hp = 22
+mp = 0
+attack = 7
+defense = 4
+speed = 9
+growth_hp = 5
+growth_mp = 0
+growth_attack = 2
+growth_defense = 1
+growth_speed = 3

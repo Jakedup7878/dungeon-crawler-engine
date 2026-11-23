@@ -30,6 +30,11 @@ name: B1F - The Old Cellars
 |           |#######################|   D       |
 +---+---+---+---+---+---+---+---+---+---+---+---+
 
+[settings]
+encounters = slime, giant-rat
+encounter_rate = 7
+group = 1-3
+
 [event 3,8]
 name = A noise
 text = The door creaks shut behind you. Somewhere in the dark, something small skitters away.
@@ -41,3 +46,9 @@ contents = A rusty key and 12 gold pieces.
 [npc 10,1]
 name = Old man
 text = Ah, a visitor! Few come down to the old cellars any more.\nMind the pillars, and mind the doors: not everything behind them is friendly.
+
+[event 10,9]
+name = The Rat King
+text = Something huge stirs among the crates. Red eyes glint in the dark!
+once = yes
+battle = rat-king, giant-rat

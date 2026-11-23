@@ -1,5 +1,6 @@
 package crawler.editor;
 
+import crawler.core.CharacterClass;
 import crawler.core.PartyMember;
 
 import javax.swing.JComboBox;
@@ -12,16 +13,16 @@ import java.util.List;
 
 /** The fields for one party member, for {@link RosterDialog}. */
 final class PartyForm implements RosterDialog.Form<PartyMember> {
-    private static final String[] CLASSES = {"Fighter", "Mage", "Priest", "Thief"};
-
     private final JTextField name = new JTextField(18);
-    private final JComboBox<String> characterClass = new JComboBox<>(CLASSES);
+    private final JComboBox<String> characterClass;
     private final JSpinner level = StatFields.spinner(1, 99);
     private final StatFields stats = new StatFields();
     private final ImagePicker portrait;
     private final JComponent component;
 
-    PartyForm(AssetStore assets) {
+    /** @param classes the project's classes (or the built-in ones), offered in the Class box */
+    PartyForm(AssetStore assets, List<CharacterClass> classes) {
+        characterClass = new JComboBox<>(classes.stream().map(CharacterClass::name).toArray(String[]::new));
         characterClass.setEditable(true); // pick one, or type your own
         portrait = new ImagePicker(assets, null, null, "No portrait yet");
         List<JComponent> rows = new ArrayList<>(List.of(

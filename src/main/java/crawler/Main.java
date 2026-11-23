@@ -1,6 +1,7 @@
 package crawler;
 
 import crawler.core.DungeonMap;
+import crawler.core.GameContent;
 import crawler.core.GameProject;
 import crawler.core.MapLoader;
 import crawler.render.AssetSource;
@@ -10,6 +11,7 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -17,7 +19,7 @@ import java.nio.file.Path;
  * Entry point.
  *
  * <pre>
- *   java crawler.Main                plays the published game (see below), or the built-in sample floor
+ *   java crawler.Main                plays the published game (see below), or the built-in sample game
  *   java crawler.Main "My Game"      plays a project folder, starting on its starting map
  *   java crawler.Main my-map.txt     plays one map file
  * </pre>
@@ -28,15 +30,17 @@ import java.nio.file.Path;
  * The map editor is a separate program: {@link crawler.editor.MapEditor}.
  */
 public final class Main {
-    private static final String DEFAULT_MAP = "/maps/b1f.txt";
+    /** The sample game that comes with the engine, on the classpath. */
+    private static final String SAMPLE = "/sample/";
+    private static final String SAMPLE_MAP = SAMPLE + "maps/b1f.txt";
     /** Where a published game keeps its project, next to the program. */
     public static final String BUNDLED_FOLDER = "game";
 
     private Main() {
     }
 
-    /** What to play: a map, where its images come from, and the window title. */
-    public record Loaded(DungeonMap map, AssetSource assets, String title) {
+    /** What to play: a map, the rest of the game, where its files come from, and the window title. */
+    public record Loaded(DungeonMap map, GameContent content, AssetSource assets, String title) {
     }
 
     public static void main(String[] args) {
@@ -50,18 +54,22 @@ public final class Main {
             System.exit(1);
             return;
         }
-        SwingUtilities.invokeLater(() -> GameWindow.open(game.map(), game.assets(), game.title(), true));
+        SwingUtilities.invokeLater(() -> GameWindow.open(game.map(), game.content(), game.assets(), game.title(), true, true));
     }
 
     /**
-     * Loads a project folder, a single map file, or (for null) the built-in sample.
-     * Images are looked up relative to the project folder, or for a map on its own, the map's folder.
+     * Loads a project folder, a single map file, or (for null) the built-in sample game.
+     * Files are looked up relative to the project folder, or for a map on its own, the map's folder.
      */
     public static Loaded load(Path target) throws IOException {
         if (target == null) {
-            DungeonMap map = MapLoader.loadResource(DEFAULT_MAP);
-            AssetSource assets = AssetSource.classpath(DEFAULT_MAP.substring(0, DEFAULT_MAP.lastIndexOf('/') + 1));
-            return new Loaded(map, assets, "Dungeon Crawler - " + map.name());
+            Path sample = sampleFolder();
+            if (sample != null) {
+                return load(sample);
+            }
+            // Packed inside a jar: just the sample map.
+            DungeonMap map = MapLoader.loadResource(SAMPLE_MAP);
+            return new Loaded(map, GameContent.EMPTY, AssetSource.classpath(SAMPLE), "Dungeon Crawler - " + map.name());
         }
         target = target.toAbsolutePath();
         if (Files.isDirectory(target)) {
@@ -70,12 +78,27 @@ public final class Main {
             }
             GameProject project = GameProject.open(target);
             DungeonMap map = MapLoader.load(project.startMapFile());
-            return new Loaded(map, AssetSource.directory(project.root()), project.name() + " - " + map.name());
+            return new Loaded(map, GameContent.load(project), AssetSource.directory(project.root()),
+                    project.name() + " - " + map.name());
         }
         DungeonMap map = MapLoader.load(target);
         Path root = GameProject.findRoot(target);
-        return new Loaded(map, AssetSource.directory(root != null ? root : target.getParent()),
+        GameContent content = root == null ? GameContent.EMPTY : GameContent.load(GameProject.open(root));
+        return new Loaded(map, content, AssetSource.directory(root != null ? root : target.getParent()),
                 "Dungeon Crawler - " + map.name());
+    }
+
+    /** The sample game's folder, when the classpath is a folder of files (as when run from the build). */
+    private static Path sampleFolder() {
+        URL url = Main.class.getResource(SAMPLE + GameProject.FILE_NAME);
+        if (url == null || !"file".equals(url.getProtocol())) {
+            return null;
+        }
+        try {
+            return Path.of(url.toURI()).getParent();
+        } catch (URISyntaxException e) {
+            return null;
+        }
     }
 
     /** The project shipped with a published game, or null if there isn't one. */

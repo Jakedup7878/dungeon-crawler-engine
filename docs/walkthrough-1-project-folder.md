@@ -1,7 +1,8 @@
 # Walkthrough 1: Project folders and publishing
 
 > **Already applied.** Everything below is already in this project. Read it to learn how the feature works, or use
-> it to build the same thing in another codebase.
+> it to build the same thing in another codebase. Later features (battles, classes, attack animations,
+> music, animated sprites) changed some of these classes since, so the code in `src/` is the current version.
 
 Right now each map keeps its pictures in an `assets` folder next to the map file, and the game plays one map file
 at a time. In this walkthrough you give every game its own **project folder**, so all its maps share one set of

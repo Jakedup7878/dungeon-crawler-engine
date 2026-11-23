@@ -43,6 +43,9 @@ public final class DungeonMap {
     private final EnumMap<Surface, String> textures = new EnumMap<>(Surface.class);
     /** Objects by cell index (y * width + x), so they come out in reading order. */
     private final TreeMap<Integer, MapObject> objects = new TreeMap<>();
+    /** Background music (a WAV or MIDI asset reference), or null for silence. */
+    private String music;
+    private Encounters encounters = Encounters.NONE;
 
     /** Creates a map of open floor with no walls. */
     public DungeonMap(String name, int width, int height) {
@@ -250,18 +253,57 @@ public final class DungeonMap {
         return object != null && object.solid();
     }
 
-    /** Every image this map refers to: textures first, then object images. */
+    // ---------------------------------------------------------------- settings
+
+    /** The map's background music (an asset reference to a WAV or MIDI file), or null. */
+    public String music() {
+        return music;
+    }
+
+    public void setMusic(String reference) {
+        music = reference == null || reference.isBlank() ? null : reference.strip();
+    }
+
+    public Encounters encounters() {
+        return encounters;
+    }
+
+    public void setEncounters(Encounters encounters) {
+        this.encounters = Objects.requireNonNull(encounters);
+    }
+
+    /** Every file this map refers to: textures, object pictures, then music. */
     public Set<String> assetReferences() {
         Set<String> references = new LinkedHashSet<>(textures.values());
         for (MapObject object : objects.values()) {
             if (object.sprite() != null) {
-                references.add(object.sprite());
+                references.add(object.sprite().image());
             }
             if (object.openSprite() != null) {
-                references.add(object.openSprite());
+                references.add(object.openSprite().image());
             }
         }
+        if (music != null) {
+            references.add(music);
+        }
         return references;
+    }
+
+    /** A copy with asset references changed as the map says (old reference to new); others stay. */
+    public DungeonMap withRenamedAssets(Map<String, String> renamed) {
+        DungeonMap copy = copy();
+        textures.forEach((surface, reference) -> copy.textures.put(surface, renamed.getOrDefault(reference, reference)));
+        for (MapObject o : objects.values()) {
+            copy.putObject(o.withSprites(rename(o.sprite(), renamed), rename(o.openSprite(), renamed)));
+        }
+        if (music != null) {
+            copy.music = renamed.getOrDefault(music, music);
+        }
+        return copy;
+    }
+
+    private static SpriteRef rename(SpriteRef sprite, Map<String, String> renamed) {
+        return sprite == null ? null : sprite.withImage(renamed.getOrDefault(sprite.image(), sprite.image()));
     }
 
     // ---------------------------------------------------------------- copies
@@ -277,10 +319,12 @@ public final class DungeonMap {
         copy.startFacing = startFacing;
         copy.textures.putAll(textures);
         copy.objects.putAll(objects);
+        copy.music = music;
+        copy.encounters = encounters;
         return copy;
     }
 
-    /** Whether both maps have the same name, size, cells, edges, start, textures and objects. */
+    /** Whether both maps have the same name, size, cells, edges, start, textures, objects and settings. */
     public boolean contentEquals(DungeonMap other) {
         return other != null
                 && name.equals(other.name)
@@ -293,7 +337,9 @@ public final class DungeonMap {
                 && Arrays.equals(horizontal, other.horizontal)
                 && Arrays.equals(vertical, other.vertical)
                 && textures.equals(other.textures)
-                && objects.equals(other.objects);
+                && objects.equals(other.objects)
+                && Objects.equals(music, other.music)
+                && encounters.equals(other.encounters);
     }
 
     /**
@@ -334,6 +380,8 @@ public final class DungeonMap {
         }
         result.setStart(clamp(startX + offsetX, newWidth), clamp(startY + offsetY, newHeight), startFacing);
         result.textures.putAll(textures);
+        result.music = music;
+        result.encounters = encounters;
         for (MapObject object : objects.values()) {
             int x = object.x() + offsetX;
             int y = object.y() + offsetY;

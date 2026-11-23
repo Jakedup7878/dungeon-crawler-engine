@@ -8,6 +8,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The map being edited: the map itself, the file it came from, undo/redo history and
@@ -30,6 +31,8 @@ final class MapDocument {
     /** The map before the edit in progress, or null. */
     private DungeonMap before;
     private MapCheck check;
+    /** Ids of the project's enemies, for checking encounters; null when there is no project. */
+    private Set<String> knownEnemies;
 
     /** @param assets where the map's images are looked up, for the checks */
     MapDocument(DungeonMap map, Path file, AssetSource assets) {
@@ -64,7 +67,7 @@ final class MapDocument {
 
     MapCheck check() {
         if (check == null) {
-            check = MapCheck.of(map, assets);
+            check = MapCheck.of(map, assets, knownEnemies);
         }
         return check;
     }
@@ -143,6 +146,12 @@ final class MapDocument {
             map = redo.pop();
             changed();
         }
+    }
+
+    /** The project's enemy ids (null for none known), so the checks can spot typos in encounters. */
+    void setKnownEnemies(Set<String> ids) {
+        knownEnemies = ids == null ? null : Set.copyOf(ids);
+        changed();
     }
 
     /** Re-runs the checks (after images were imported or the asset folder changed). */

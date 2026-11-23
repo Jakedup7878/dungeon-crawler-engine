@@ -1,29 +1,38 @@
 package crawler.core;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
  * An event, chest or NPC standing in cell (x, y). Immutable: edits make a new object.
  *
- * <p>Images are asset references: paths relative to the map file, such as
- * {@code assets/old-man.png}. Null means the built-in look (for events: invisible).
+ * <p>Pictures are {@link SpriteRef}s (an image, optionally an animation strip) relative to
+ * the project folder. Null means the built-in look (for events: invisible).
  *
  * @param name       shown in the game when the party meets it; may be empty
  * @param text       the event's message, the chest's contents or the NPC's dialogue; may be empty
- * @param sprite     the object's image, or null for the default
- * @param openSprite chests only: the image once opened, or null for the default
+ * @param sprite     the object's picture, or null for the default
+ * @param openSprite chests only: the picture once opened, or null for the default
  * @param once       events only: whether it happens only the first time the party steps there
+ * @param battle     events only: ids of enemies the party has to fight when it steps there (a fixed
+ *                   battle, such as a boss); empty for none
  */
 public record MapObject(ObjectType type, int x, int y, String name, String text,
-                        String sprite, String openSprite, boolean once) {
+                        SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle) {
 
     public MapObject {
         Objects.requireNonNull(type, "type");
         name = name == null ? "" : name.strip();
         text = text == null ? "" : text.replace("\r", "").strip();
-        sprite = blankToNull(sprite);
-        openSprite = type == ObjectType.CHEST ? blankToNull(openSprite) : null;
+        openSprite = type == ObjectType.CHEST ? openSprite : null;
         once = type != ObjectType.EVENT || once;
+        battle = type == ObjectType.EVENT && battle != null ? List.copyOf(battle) : List.of();
+    }
+
+    /** An object without a battle (chests, NPCs and most events). */
+    public MapObject(ObjectType type, int x, int y, String name, String text,
+                     SpriteRef sprite, SpriteRef openSprite, boolean once) {
+        this(type, x, y, name, text, sprite, openSprite, once, List.of());
     }
 
     /** A new object with the default name and nothing else filled in. */
@@ -46,10 +55,10 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     }
 
     public MapObject at(int newX, int newY) {
-        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once);
+        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
+    public MapObject withSprites(SpriteRef newSprite, SpriteRef newOpenSprite) {
+        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle);
     }
 }

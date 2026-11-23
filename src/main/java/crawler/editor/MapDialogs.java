@@ -130,8 +130,14 @@ final class MapDialogs {
                 <tr><td><b>Right mouse</b></td><td>Does the opposite: fills with rock, removes walls, doors and objects.</td></tr>
                 </table>
                 <p>With the Event, Chest or NPC tool, click an object to edit it and drag it to move it.
-                <b>Edit &gt; Textures</b> (Ctrl+T) sets your own wall, door, floor and ceiling images.
-                Every image you choose is copied into an <code>assets</code> folder next to the map when you save.</p>
+                <b>Edit &gt; Textures</b> (Ctrl+T) sets your own wall, door, floor and ceiling images, and
+                <b>Edit &gt; Map Settings</b> (Ctrl+M) the floor's music and random battles.
+                Every picture and sound you choose is copied into the project's <code>assets</code> folder when you save.</p>
+                <h3>The rest of the game</h3>
+                <p>The <b>Project</b> menu holds what belongs to the whole game: <b>Settings</b> (party creation,
+                starting gold, the default NPC and chest looks, battle and victory music), <b>Party Members</b>,
+                <b>Classes</b>, <b>Enemies</b> and <b>Attack Animations</b>. For an animation, put the frames side by side
+                in one image and set <b>Frames</b>.</p>
                 <h3>Getting around</h3>
                 <table cellpadding='2'>
                 <tr><td><b>Mouse wheel</b></td><td>Scroll (hold Shift to scroll sideways)</td></tr>

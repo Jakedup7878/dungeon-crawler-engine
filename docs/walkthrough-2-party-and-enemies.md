@@ -1,7 +1,8 @@
 # Walkthrough 2: Party members and enemies in the editor
 
 > **Already applied.** Everything below is already in this project. Read it to learn how the feature works, or use
-> it to build the same thing in another codebase.
+> it to build the same thing in another codebase. Later features (battles, classes, attack animations,
+> music, animated sprites) changed some of these classes since, so the code in `src/` is the current version.
 
 In this walkthrough you add two windows to the editor, **Project > Party Members** and **Project > Enemies**. In
 each one you make, edit and reorder characters, set their stats, and give each a picture of your own.

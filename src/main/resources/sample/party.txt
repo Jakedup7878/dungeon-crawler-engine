@@ -1,0 +1,31 @@
+; The ready-made party the game can start with, in marching order.
+
+[member]
+name = Aldric
+class = Fighter
+level = 1
+hp = 32
+mp = 0
+attack = 9
+defense = 7
+speed = 5
+
+[member]
+name = Mira
+class = Mage
+level = 1
+hp = 18
+mp = 20
+attack = 4
+defense = 3
+speed = 6
+
+[member]
+name = Tobin
+class = Priest
+level = 1
+hp = 24
+mp = 14
+attack = 6
+defense = 6
+speed = 4

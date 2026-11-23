@@ -44,8 +44,11 @@ import java.util.regex.Pattern;
  *
  * The grid ends at the first blank line. After it come optional sections:
  * <ul>
+ *   <li>{@code [settings]}: {@code music} (a WAV or MIDI file), {@code encounters} (enemy ids, comma
+ *       separated), {@code encounter_rate} (percent per step), {@code group} (such as {@code 1-3}).</li>
  *   <li>{@code [textures]} with {@code wall}, {@code door}, {@code floor}, {@code ceiling} = image path.</li>
- *   <li>{@code [event x,y]}: {@code name}, {@code text}, {@code once} (yes/no), {@code sprite}.</li>
+ *   <li>{@code [event x,y]}: {@code name}, {@code text}, {@code once} (yes/no), {@code sprite},
+ *       {@code battle} (enemy ids to fight there).</li>
  *   <li>{@code [chest x,y]}: {@code name}, {@code contents}, {@code sprite}, {@code opened}.</li>
  *   <li>{@code [npc x,y]}: {@code name}, {@code text}, {@code sprite}.</li>
  * </ul>
@@ -58,7 +61,7 @@ public final class MapLoader {
     private static final int CELL_W = 4;
     private static final Pattern SECTION = Pattern.compile("\\[\\s*(\\w+)(?:\\s+(\\d+)\\s*,\\s*(\\d+))?\\s*]");
     private static final Map<ObjectType, Set<String>> OBJECT_KEYS = Map.of(
-            ObjectType.EVENT, Set.of("name", "text", "once", "sprite"),
+            ObjectType.EVENT, Set.of("name", "text", "once", "sprite", "battle"),
             ObjectType.CHEST, Set.of("name", "contents", "sprite", "opened"),
             ObjectType.NPC, Set.of("name", "text", "sprite"));
 
@@ -70,7 +73,7 @@ public final class MapLoader {
         return parse(file.getFileName().toString(), lines);
     }
 
-    /** Loads a map from the classpath, e.g. {@code "/maps/b1f.txt"}. */
+    /** Loads a map from the classpath, e.g. {@code "/sample/maps/b1f.txt"}. */
     public static DungeonMap loadResource(String path) throws IOException {
         try (InputStream in = MapLoader.class.getResourceAsStream(path)) {
             if (in == null) {
@@ -258,6 +261,10 @@ public final class MapLoader {
     }
 
     private static void applySection(String source, Section section, DungeonMap map, boolean hasStart) {
+        if (section.kind().equals("settings")) {
+            applySettings(source, section, map);
+            return;
+        }
         if (section.kind().equals("textures")) {
             if (section.hasCell()) {
                 throw error(source, section.line(), "[textures] doesn't take a cell position");
@@ -318,7 +325,8 @@ public final class MapLoader {
         }
         String text = type == ObjectType.CHEST ? v.get("contents") : v.get("text");
         map.putObject(new MapObject(type, x, y, v.getOrDefault("name", ""), text,
-                v.get("sprite"), v.get("opened"), once));
+                SpriteRef.parse(v.get("sprite")), SpriteRef.parse(v.get("opened")), once,
+                Encounters.parseIds(v.get("battle"))));
     }
 
     /** {@code \n} is a line break and {@code \\} a backslash. */
@@ -342,6 +350,48 @@ public final class MapLoader {
             out.append(c);
         }
         return out.toString();
+    }
+
+    private static void applySettings(String source, Section section, DungeonMap map) {
+        if (section.hasCell()) {
+            throw error(source, section.line(), "[settings] doesn't take a cell position");
+        }
+        Map<String, String> v = section.values();
+        for (String key : v.keySet()) {
+            if (!Set.of("music", "encounters", "encounter_rate", "group").contains(key)) {
+                throw error(source, section.keyLines().get(key), "unknown setting '" + key
+                        + "' (use music, encounters, encounter_rate or group)");
+            }
+        }
+        map.setMusic(v.get("music"));
+        int rate = 0;
+        if (v.containsKey("encounter_rate")) {
+            try {
+                rate = Integer.parseInt(v.get("encounter_rate").replace("%", "").strip());
+            } catch (NumberFormatException e) {
+                rate = -1;
+            }
+            if (rate < 0 || rate > 100) {
+                throw error(source, section.keyLines().get("encounter_rate"), "encounter_rate should be 0 to 100");
+            }
+        }
+        int min = Encounters.NONE.minGroup();
+        int max = Encounters.NONE.maxGroup();
+        if (v.containsKey("group")) {
+            String[] parts = v.get("group").split("-");
+            try {
+                min = Integer.parseInt(parts[0].strip());
+                max = parts.length > 1 ? Integer.parseInt(parts[1].strip()) : min;
+            } catch (NumberFormatException e) {
+                min = -1;
+            }
+            if (parts.length > 2 || min < 1 || max < min || max > Encounters.MAX_GROUP) {
+                throw error(source, section.keyLines().get("group"),
+                        "group should be a number of enemies like 2, or a range like 1-3 (at most "
+                                + Encounters.MAX_GROUP + ")");
+            }
+        }
+        map.setEncounters(new Encounters(Encounters.parseIds(v.get("encounters")), rate, min, max));
     }
 
     // ------------------------------------------------------------ grid helpers

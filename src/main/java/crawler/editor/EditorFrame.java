@@ -1,15 +1,20 @@
 package crawler.editor;
 
+import crawler.core.AttackAnimation;
+import crawler.core.CharacterClass;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
 import crawler.core.EnemyType;
+import crawler.core.GameContent;
 import crawler.core.GameData;
 import crawler.core.GameProject;
 import crawler.core.MapLoader;
 import crawler.core.MapObject;
 import crawler.core.MapWriter;
 import crawler.core.PartyMember;
+import crawler.core.ProjectSettings;
+import crawler.core.SpriteRef;
 import crawler.core.Surface;
 import crawler.render.ObjectLooks;
 import crawler.ui.GameWindow;
@@ -50,11 +55,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** The map editor's main window: menus, toolbar, the map, the side panel and a status bar. */
 final class EditorFrame extends JFrame {
@@ -88,6 +97,7 @@ final class EditorFrame extends JFrame {
         project = projectOf(file);
         canvas = new MapCanvas(doc, looks);
         side = new SidePanel(doc, assets, looks);
+        applyProject();
 
         undoAction = action("Undo", KeyStroke.getKeyStroke(KeyEvent.VK_Z, MENU_KEY), doc::undo);
         redoAction = action("Redo", KeyStroke.getKeyStroke(KeyEvent.VK_Y, MENU_KEY), doc::redo);
@@ -185,6 +195,8 @@ final class EditorFrame extends JFrame {
         edit.add(action("Rename Map...", null, this::renameMap));
         edit.add(action("Resize Map...", null, this::resizeMap));
         edit.add(action("Textures...", KeyStroke.getKeyStroke(KeyEvent.VK_T, MENU_KEY), this::editTextures));
+        edit.add(action("Map Settings (Music and Battles)...", KeyStroke.getKeyStroke(KeyEvent.VK_M, MENU_KEY),
+                this::editMapSettings));
         bar.add(edit);
 
         JMenu tools = menu("Tools", KeyEvent.VK_T);
@@ -215,11 +227,14 @@ final class EditorFrame extends JFrame {
         bar.add(view);
 
         JMenu projectMenu = menu("Project", KeyEvent.VK_P);
+        projectMenu.add(projectAction("Settings...", this::editProjectSettings));
         projectMenu.add(projectAction("Make This the Starting Map", this::makeStartMap));
         projectMenu.add(projectAction("Show Project Folder", this::showProjectFolder));
         projectMenu.addSeparator();
         projectMenu.add(projectAction("Party Members...", this::editParty));
+        projectMenu.add(projectAction("Classes...", this::editClasses));
         projectMenu.add(projectAction("Enemies...", this::editEnemies));
+        projectMenu.add(projectAction("Attack Animations...", this::editAnimations));
         bar.add(projectMenu);
 
         JMenu test = menu("Test", KeyEvent.VK_S);
@@ -441,7 +456,7 @@ final class EditorFrame extends JFrame {
             project = projectOf(file);
             assets.reset(assetRoot(file));
             looks.clear();
-            side.assetsChanged();
+            applyProject();
             doc.reset(map, file.toAbsolutePath());
             afterLoad("Opened " + file.toAbsolutePath() + ".");
             return true;
@@ -498,7 +513,7 @@ final class EditorFrame extends JFrame {
             Path folder = assetRoot(file);
             Map<String, String> renamed = assets.saveImages(doc.map(), folder);
             if (!renamed.isEmpty()) {
-                doc.replace(AssetStore.withRenamedImages(doc.map(), renamed));
+                doc.replace(doc.map().withRenamedAssets(renamed));
             }
             MapWriter.save(doc.map(), file);
             assets.setFolder(folder);
@@ -508,6 +523,7 @@ final class EditorFrame extends JFrame {
             return false;
         }
         project = projectOf(file); // saving into a project folder makes the map part of that project
+        applyProject();
         doc.markSaved(file.toAbsolutePath());
         status("Saved " + file.toAbsolutePath() + "."
                 + (check.problems().isEmpty() ? "" : "  Note: " + check.problems().get(0)));
@@ -529,7 +545,7 @@ final class EditorFrame extends JFrame {
             return project.mapsFolder();
         }
         Path working = Path.of(System.getProperty("user.dir"));
-        Path maps = working.resolve(Path.of("src", "main", "resources", "maps"));
+        Path maps = working.resolve(Path.of("src", "main", "resources", "sample", "maps"));
         return Files.isDirectory(maps) ? maps : working;
     }
 
@@ -650,7 +666,7 @@ final class EditorFrame extends JFrame {
             List<PartyMember> edited = RosterDialog.show(this, "Party - " + project.name(),
                     "The party the game starts with, in marching order (up to " + GameData.MAX_PARTY + "). "
                             + "Saved in party.txt when you press OK.",
-                    party, new PartyForm(assets), GameData.MAX_PARTY);
+                    party, new PartyForm(assets, classes()), GameData.MAX_PARTY);
             if (edited == null) {
                 return;
             }
@@ -672,19 +688,155 @@ final class EditorFrame extends JFrame {
             List<EnemyType> edited = RosterDialog.show(this, "Enemies - " + project.name(),
                     "Every kind of enemy in the game. Encounters will refer to them by id. "
                             + "Saved in enemies.txt when you press OK.",
-                    enemies, new EnemyForm(assets), Integer.MAX_VALUE);
+                    enemies, new EnemyForm(assets, animations()), Integer.MAX_VALUE);
             if (edited == null) {
                 return;
             }
-            Map<String, String> renamed = assets.saveImages(
-                    edited.stream().map(EnemyType::sprite).filter(Objects::nonNull).toList(), project.root());
-            edited = edited.stream().map(e -> e.withSprite(renamed.getOrDefault(e.sprite(), e.sprite()))).toList();
+            Map<String, String> renamed = saveFiles(edited.stream().map(EnemyType::sprite)
+                    .filter(Objects::nonNull).map(SpriteRef::image).toList());
+            edited = edited.stream().map(e -> e.withSprite(renamed(e.sprite(), renamed))).toList();
             GameData.saveEnemies(project.root(), edited);
+            applyProject();
             status("Saved " + edited.size() + " kinds of enemy in " + GameData.ENEMIES_FILE + ".");
         } catch (IOException | IllegalArgumentException e) {
             JOptionPane.showMessageDialog(this, "Could not edit the enemies:\n" + e.getMessage(),
                     APP, JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void editClasses() {
+        try {
+            List<CharacterClass> classes = GameData.loadClasses(project.root());
+            List<CharacterClass> edited = RosterDialog.show(this, "Classes - " + project.name(),
+                    "The classes party members can belong to. With none, the game uses Fighter, Mage, Priest and Thief. "
+                            + "Saved in classes.txt when you press OK.",
+                    classes, new ClassForm(assets, animations()), Integer.MAX_VALUE);
+            if (edited == null) {
+                return;
+            }
+            Map<String, String> renamed = saveFiles(edited.stream().map(CharacterClass::portrait)
+                    .filter(Objects::nonNull).toList());
+            edited = edited.stream().map(c -> c.withPortrait(renamed(c.portrait(), renamed))).toList();
+            GameData.saveClasses(project.root(), edited);
+            status("Saved " + edited.size() + " classes in " + GameData.CLASSES_FILE + ".");
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Could not edit the classes:\n" + e.getMessage(),
+                    APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editAnimations() {
+        try {
+            List<AttackAnimation> animations = GameData.loadAnimations(project.root());
+            List<AttackAnimation> edited = RosterDialog.show(this, "Attack Animations - " + project.name(),
+                    "How attacks look and sound. Give them to classes and enemies in their own lists. "
+                            + "Saved in animations.txt when you press OK.",
+                    animations, new AnimationForm(assets), Integer.MAX_VALUE);
+            if (edited == null) {
+                return;
+            }
+            Map<String, String> renamed = saveFiles(edited.stream().flatMap(a -> Stream.of(
+                    a.image() == null ? null : a.image().image(), a.sound())).filter(Objects::nonNull).toList());
+            edited = edited.stream().map(a -> a.withFiles(renamed(a.image(), renamed), renamed(a.sound(), renamed))).toList();
+            GameData.saveAnimations(project.root(), edited);
+            status("Saved " + edited.size() + " attack animations in " + GameData.ANIMATIONS_FILE + ".");
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Could not edit the animations:\n" + e.getMessage(),
+                    APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editProjectSettings() {
+        SettingsDialogs.ProjectChoices choices = SettingsDialogs.projectSettings(this, project, assets);
+        if (choices == null) {
+            return;
+        }
+        try {
+            ProjectSettings s = choices.settings();
+            Map<String, String> renamed = saveFiles(s.assetReferences());
+            project.setName(choices.name());
+            project.setSettings(new ProjectSettings(renamed(s.npcSprite(), renamed), renamed(s.chestSprite(), renamed),
+                    renamed(s.chestOpenSprite(), renamed), renamed(s.battleMusic(), renamed),
+                    renamed(s.victoryMusic(), renamed), s.partyCreation(), s.partySize(), s.startingGold()));
+            project.save();
+            applyProject();
+            documentChanged();
+            status("Saved the project settings in " + GameProject.FILE_NAME + ".");
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Could not save the settings:\n" + e.getMessage(),
+                    APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editMapSettings() {
+        List<EnemyType> enemies = project == null ? List.of() : enemiesOrEmpty();
+        SettingsDialogs.MapSettings chosen = SettingsDialogs.mapSettings(this, doc.map(), assets, enemies);
+        if (chosen == null) {
+            return;
+        }
+        DungeonMap next = doc.map().copy();
+        next.setMusic(chosen.music());
+        next.setEncounters(chosen.encounters());
+        doc.replace(next);
+        doc.refresh();
+        status(chosen.encounters().active()
+                ? "Random battles: " + chosen.encounters().rate() + "% a step. F5 to try them. Ctrl+Z undoes it."
+                : "Map settings updated. Ctrl+Z undoes it.");
+    }
+
+    // ------------------------------------------------------------ project content
+
+    /** Uses the open project's default looks, and tells the checks which enemies exist. */
+    private void applyProject() {
+        looks.setDefaults(project == null ? ProjectSettings.DEFAULT : project.settings());
+        doc.setKnownEnemies(project == null ? null
+                : enemiesOrEmpty().stream().map(EnemyType::id).collect(Collectors.toSet()));
+        side.assetsChanged();
+    }
+
+    private List<EnemyType> enemiesOrEmpty() {
+        try {
+            return GameData.loadEnemies(project.root());
+        } catch (IOException | IllegalArgumentException e) {
+            status("Couldn't read " + GameData.ENEMIES_FILE + ": " + e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** The project's classes, or the built-in ones. */
+    private List<CharacterClass> classes() {
+        try {
+            List<CharacterClass> classes = GameData.loadClasses(project.root());
+            return classes.isEmpty() ? CharacterClass.builtIn() : classes;
+        } catch (IOException | IllegalArgumentException e) {
+            return CharacterClass.builtIn();
+        }
+    }
+
+    private List<AttackAnimation> animations() {
+        try {
+            return GameData.loadAnimations(project.root());
+        } catch (IOException | IllegalArgumentException e) {
+            return List.of();
+        }
+    }
+
+    /** Everything the play test needs besides the map; empty for a map outside any project. */
+    private GameContent content() throws IOException {
+        return project == null ? GameContent.EMPTY : GameContent.load(project);
+    }
+
+    /** Copies just-imported files into the project's assets folder; returns any that had to be renamed. */
+    private Map<String, String> saveFiles(Collection<String> references) throws IOException {
+        return assets.saveImages(Set.copyOf(references), project.root());
+    }
+
+    private static String renamed(String reference, Map<String, String> renamed) {
+        return reference == null ? null : renamed.getOrDefault(reference, reference);
+    }
+
+    private static SpriteRef renamed(SpriteRef sprite, Map<String, String> renamed) {
+        return sprite == null ? null : sprite.withImage(renamed.getOrDefault(sprite.image(), sprite.image()));
     }
 
     private void showProjectFolder() {
@@ -757,7 +909,7 @@ final class EditorFrame extends JFrame {
         MapObject existing = map.object(x, y);
         MapObject edited;
         if (existing != null) {
-            edited = ObjectDialog.show(this, existing, false, assets);
+            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds());
         } else {
             Tool tool = canvas.tool();
             if (!tool.placesObjects()) {
@@ -768,7 +920,7 @@ final class EditorFrame extends JFrame {
                 status(problem);
                 return;
             }
-            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets);
+            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds());
         }
         if (edited == null || edited.equals(existing)) {
             return;
@@ -778,6 +930,10 @@ final class EditorFrame extends JFrame {
         doc.endEdit();
         doc.refresh();
         status((existing == null ? "Added " : "Updated ") + "the " + edited.type().lowerName() + " at " + x + ", " + y + ".");
+    }
+
+    private List<String> enemyIds() {
+        return project == null ? List.of() : enemiesOrEmpty().stream().map(EnemyType::id).toList();
     }
 
     /** Opens the map in a game window, from the start or from where the 3D preview stands. */
@@ -793,7 +949,16 @@ final class EditorFrame extends JFrame {
                     "Play test", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        GameWindow.open(copy, assets, "Play test - " + copy.name() + "   (Esc to close)", false);
+        GameContent content;
+        try {
+            content = content();
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "The project's files have a problem, so the play test can't start:\n"
+                    + e.getMessage(), "Play test", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // From the start, the play test offers party creation (if the project does); from the preview it doesn't.
+        GameWindow.open(copy, content, assets, "Play test - " + copy.name() + "   (Esc to close)", false, !fromPreview);
         status("Play test running in its own window. It uses the map as it was when you pressed Play.");
     }
 }

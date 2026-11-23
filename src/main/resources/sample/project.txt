@@ -1,0 +1,6 @@
+; The sample game that comes with the engine. Paths are relative to this folder.
+name = Sample Quest
+start = maps/b1f.txt
+party_creation = yes
+party_size = 4
+starting_gold = 20

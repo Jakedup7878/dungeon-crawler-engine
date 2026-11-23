@@ -1,8 +1,7 @@
 package crawler.editor;
 
+import crawler.audio.AudioFiles;
 import crawler.core.DungeonMap;
-import crawler.core.MapObject;
-import crawler.core.Surface;
 import crawler.render.AssetSource;
 
 import javax.imageio.ImageIO;
@@ -20,7 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The images the map being edited uses.
+ * The pictures and sounds the game being edited uses.
  *
  * <p>When you import an image it is kept in memory and the map refers to it as
  * {@code assets/<name>}. Saving the map writes it into an {@code assets} folder next to
@@ -64,6 +63,12 @@ final class AssetStore implements AssetSource {
         return decoded.computeIfAbsent(reference, r -> Optional.ofNullable(decode(bytes(r)))).orElse(null);
     }
 
+    /** Raw file contents, for music and sounds. */
+    @Override
+    public byte[] data(String reference) {
+        return reference == null ? null : bytes(reference);
+    }
+
     /** The file contents for a reference: imported, or read from the map's folder. Null if missing. */
     byte[] bytes(String reference) {
         byte[] bytes = imported.get(reference);
@@ -86,21 +91,42 @@ final class AssetStore implements AssetSource {
      * @throws IOException with a message for the user if the file can't be used
      */
     String importImage(Path file) throws IOException {
-        long size = Files.size(file);
-        if (size > MAX_BYTES) {
-            throw new IOException("It is " + size / (1024 * 1024) + " MB; images can be at most 16 MB.");
-        }
-        byte[] bytes = Files.readAllBytes(file);
+        byte[] bytes = readLimited(file);
         BufferedImage image = decode(bytes);
         if (image == null) {
             throw new IOException("It isn't an image the editor can read. Use PNG, JPEG, GIF or BMP.");
         }
+        String reference = store(file, bytes);
+        decoded.put(reference, Optional.of(image));
+        return reference;
+    }
+
+    /**
+     * Brings a sound file (WAV, MIDI, AIFF or AU) into the game, the same way as an image.
+     *
+     * @throws IOException with a message for the user if the game couldn't play it
+     */
+    String importSound(Path file) throws IOException {
+        byte[] bytes = readLimited(file);
+        AudioFiles.describe(bytes); // throws if Java can't play it
+        return store(file, bytes);
+    }
+
+    private static byte[] readLimited(Path file) throws IOException {
+        long size = Files.size(file);
+        if (size > MAX_BYTES) {
+            throw new IOException("It is " + size / (1024 * 1024) + " MB; files can be at most 16 MB.");
+        }
+        return Files.readAllBytes(file);
+    }
+
+    /** Keeps the bytes under assets/name, numbering the name if a different file already has it. */
+    private String store(Path file, byte[] bytes) {
         String reference = FOLDER + "/" + cleanName(file.getFileName().toString());
         for (int n = 2; ; n++) {
             byte[] existing = bytes(reference);
             if (existing == null) {
                 imported.put(reference, bytes);
-                decoded.put(reference, Optional.of(image));
                 return reference;
             }
             if (Arrays.equals(existing, bytes)) {
@@ -149,24 +175,6 @@ final class AssetStore implements AssetSource {
             }
         }
         return renamed;
-    }
-
-    /** A copy of the map with image references changed as {@link #saveImages} asked. */
-    static DungeonMap withRenamedImages(DungeonMap map, Map<String, String> renamed) {
-        DungeonMap copy = map.copy();
-        for (Surface surface : Surface.values()) {
-            String reference = map.texture(surface);
-            if (reference != null) {
-                copy.setTexture(surface, renamed.getOrDefault(reference, reference));
-            }
-        }
-        for (MapObject o : map.objects()) {
-            copy.putObject(new MapObject(o.type(), o.x(), o.y(), o.name(), o.text(),
-                    o.sprite() == null ? null : renamed.getOrDefault(o.sprite(), o.sprite()),
-                    o.openSprite() == null ? null : renamed.getOrDefault(o.openSprite(), o.openSprite()),
-                    o.once()));
-        }
-        return copy;
     }
 
     /** A safe, lower-case file name that keeps its extension. */

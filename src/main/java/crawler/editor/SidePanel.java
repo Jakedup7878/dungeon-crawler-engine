@@ -151,6 +151,11 @@ final class SidePanel extends JComponent {
             }
             y = line(g, custom.isEmpty() ? "Built-in textures" : "Own textures: " + String.join(", ", custom),
                     TEXT_FONT, TEXT, x, y);
+            String music = map.music() == null ? "no music" : "music";
+            String battles = map.encounters().active()
+                    ? "battles " + map.encounters().rate() + "% a step, " + map.encounters().groupText() + " enemies"
+                    : "no random battles";
+            y = line(g, fit(g, music + ", " + battles, textWidth), TEXT_FONT, TEXT, x, y);
             y += 12;
 
             y = header(g, "CHECKS", x, y);

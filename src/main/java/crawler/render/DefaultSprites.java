@@ -2,9 +2,11 @@ package crawler.render;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -203,6 +205,113 @@ final class DefaultSprites {
             g.dispose();
         }
         return Sprite.of(image);
+    }
+
+    /** A round, wobbling blob for enemies without a picture. The hue tells kinds of enemy apart. */
+    static Sprite blob(float hue) {
+        Color body = Color.getHSBColor(hue, 0.6f, 0.85f);
+        Color dark = Color.getHSBColor(hue, 0.75f, 0.4f);
+        Color light = Color.getHSBColor(hue, 0.25f, 1f);
+        List<BufferedImage> frames = new ArrayList<>();
+        for (int f = 0; f < 4; f++) {
+            double squash = Math.sin(f * Math.PI / 2) * 0.07;
+            BufferedImage image = new BufferedImage(64, 56, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = image.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(new Color(0, 0, 0, 90));
+                g.fillOval(8, 49, 48, 7);
+                double w = 50 * (1 + squash);
+                double h = 42 * (1 - squash);
+                double x = 32 - w / 2;
+                double y = 52 - h;
+                Ellipse2D shape = new Ellipse2D.Double(x, y, w, h);
+                g.setPaint(new GradientPaint(0, (float) y, light, 0, (float) (y + h), body));
+                g.fill(shape);
+                g.setColor(dark);
+                g.setStroke(new BasicStroke(2f));
+                g.draw(shape);
+                int eyeY = (int) (y + h * 0.36);
+                g.setColor(Color.WHITE);
+                g.fillOval(21, eyeY, 9, 11);
+                g.fillOval(35, eyeY, 9, 11);
+                g.setColor(Color.BLACK);
+                g.fillOval(24, eyeY + 4, 4, 5);
+                g.fillOval(38, eyeY + 4, 4, 5);
+                g.setColor(new Color(255, 255, 255, 150));
+                g.fillOval((int) (x + w * 0.2), (int) (y + h * 0.12), 10, 6);
+            } finally {
+                g.dispose();
+            }
+            frames.add(image);
+        }
+        return Sprite.animated(frames, 5);
+    }
+
+    /** The built-in attack animation for party members: a bright slash. */
+    static Sprite slash() {
+        List<BufferedImage> frames = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            BufferedImage image = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = image.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                double progress = Math.min(1, (i + 1) / 3.0);
+                int alpha = i < 3 ? 255 : (int) (255 * (1 - (i - 2) / 4.0));
+                int x2 = (int) Math.round(56 - 48 * progress);
+                int y2 = (int) Math.round(8 + 48 * progress);
+                g.setStroke(new BasicStroke(8f - i, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(new Color(255, 230, 150, alpha));
+                g.drawLine(56, 8, x2, y2);
+                g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(new Color(255, 255, 255, alpha));
+                g.drawLine(56, 8, x2, y2);
+                if (i >= 2) {
+                    g.setColor(new Color(255, 240, 180, alpha));
+                    for (int s = 0; s < 5; s++) {
+                        double angle = s * 1.3 + i;
+                        int r = 4 + i * 2;
+                        g.fillOval(32 + (int) (Math.cos(angle) * r) - 2, 32 + (int) (Math.sin(angle) * r) - 2, 4, 4);
+                    }
+                }
+            } finally {
+                g.dispose();
+            }
+            frames.add(image);
+        }
+        return Sprite.animated(frames, 18);
+    }
+
+    /** The built-in attack animation for enemies: three red claw marks. */
+    static Sprite claw() {
+        List<BufferedImage> frames = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            BufferedImage image = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = image.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int alpha = i < 4 ? 255 : (int) (255 * (1 - (i - 3) / 3.0));
+                for (int k = 0; k < 3; k++) {
+                    double progress = Math.max(0, Math.min(1, (i - k * 0.5) / 2.0));
+                    if (progress <= 0) {
+                        continue;
+                    }
+                    int x = 18 + k * 14;
+                    int y2 = (int) Math.round(8 + 48 * progress);
+                    int x2 = (int) Math.round(x + 8 - 16 * progress);
+                    g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g.setColor(new Color(150, 10, 10, alpha));
+                    g.drawLine(x + 8, 8, x2, y2);
+                    g.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g.setColor(new Color(255, 90, 80, alpha));
+                    g.drawLine(x + 8, 8, x2, y2);
+                }
+            } finally {
+                g.dispose();
+            }
+            frames.add(image);
+        }
+        return Sprite.animated(frames, 16);
     }
 
     private static int channel(double value) {

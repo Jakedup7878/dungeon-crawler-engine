@@ -1,0 +1,32 @@
+; The kinds of enemy in the game. Maps refer to them by the id in brackets.
+; None of these has a sprite, so each gets the built-in blob in its own colour.
+
+[enemy slime]
+name = Blue Slime
+hp = 12
+mp = 0
+attack = 5
+defense = 2
+speed = 3
+exp = 6
+gold = 3
+
+[enemy giant-rat]
+name = Giant Rat
+hp = 9
+mp = 0
+attack = 6
+defense = 1
+speed = 8
+exp = 5
+gold = 2
+
+[enemy rat-king]
+name = Rat King
+hp = 45
+mp = 0
+attack = 9
+defense = 4
+speed = 6
+exp = 40
+gold = 50
