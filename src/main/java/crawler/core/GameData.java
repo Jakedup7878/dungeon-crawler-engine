@@ -1,7 +1,6 @@
 package crawler.core;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -30,8 +29,12 @@ public final class GameData {
     // ------------------------------------------------------------ party
 
     public static List<PartyMember> loadParty(Path projectRoot) throws IOException {
+        return loadParty(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<PartyMember> loadParty(ProjectFiles files) throws IOException {
         List<PartyMember> party = new ArrayList<>();
-        for (SectionFile.Section s : sections(projectRoot, PARTY_FILE)) {
+        for (SectionFile.Section s : sections(files, PARTY_FILE)) {
             s.expect("member", false);
             s.allow("name", "class", "level", "hp", "mp", "attack", "defense", "speed", "portrait");
             party.add(new PartyMember(s.text("name"), s.text("class"), s.number("level", 1, 1, 99),
@@ -60,9 +63,13 @@ public final class GameData {
     // ------------------------------------------------------------ classes
 
     public static List<CharacterClass> loadClasses(Path projectRoot) throws IOException {
+        return loadClasses(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<CharacterClass> loadClasses(ProjectFiles files) throws IOException {
         List<CharacterClass> classes = new ArrayList<>();
         Set<String> ids = new HashSet<>();
-        for (SectionFile.Section s : sections(projectRoot, CLASSES_FILE)) {
+        for (SectionFile.Section s : sections(files, CLASSES_FILE)) {
             s.expect("class", true);
             s.allow("name", "hp", "mp", "attack", "defense", "speed",
                     "growth_hp", "growth_mp", "growth_attack", "growth_defense", "growth_speed",
@@ -92,9 +99,13 @@ public final class GameData {
     // ------------------------------------------------------------ enemies
 
     public static List<EnemyType> loadEnemies(Path projectRoot) throws IOException {
+        return loadEnemies(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<EnemyType> loadEnemies(ProjectFiles files) throws IOException {
         List<EnemyType> enemies = new ArrayList<>();
         Set<String> ids = new HashSet<>();
-        for (SectionFile.Section s : sections(projectRoot, ENEMIES_FILE)) {
+        for (SectionFile.Section s : sections(files, ENEMIES_FILE)) {
             s.expect("enemy", true);
             s.allow("name", "hp", "mp", "attack", "defense", "speed", "exp", "gold", "sprite", "animation");
             checkId(s, ids, "enemies");
@@ -120,9 +131,13 @@ public final class GameData {
     // ------------------------------------------------------------ attack animations
 
     public static List<AttackAnimation> loadAnimations(Path projectRoot) throws IOException {
+        return loadAnimations(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<AttackAnimation> loadAnimations(ProjectFiles files) throws IOException {
         List<AttackAnimation> animations = new ArrayList<>();
         Set<String> ids = new HashSet<>();
-        for (SectionFile.Section s : sections(projectRoot, ANIMATIONS_FILE)) {
+        for (SectionFile.Section s : sections(files, ANIMATIONS_FILE)) {
             s.expect("animation", true);
             s.allow("name", "image", "sound", "size");
             checkId(s, ids, "animations");
@@ -146,9 +161,9 @@ public final class GameData {
 
     // ------------------------------------------------------------ helpers
 
-    private static List<SectionFile.Section> sections(Path projectRoot, String fileName) throws IOException {
-        Path file = projectRoot.resolve(fileName);
-        return Files.exists(file) ? SectionFile.read(file) : List.of();
+    private static List<SectionFile.Section> sections(ProjectFiles files, String fileName) throws IOException {
+        List<String> lines = files.lines(fileName);
+        return lines == null ? List.of() : SectionFile.parse(fileName, lines);
     }
 
     private static void checkId(SectionFile.Section s, Set<String> ids, String what) {

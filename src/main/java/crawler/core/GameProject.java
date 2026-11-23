@@ -59,8 +59,21 @@ public final class GameProject {
 
     /** Reads the project in a folder. */
     public static GameProject open(Path root) throws IOException {
-        List<String> lines = Files.readAllLines(root.resolve(FILE_NAME), StandardCharsets.UTF_8);
-        String name = root.toAbsolutePath().getFileName().toString();
+        return read(ProjectFiles.folder(root), root);
+    }
+
+    /**
+     * Reads project.txt from a project's files.
+     *
+     * @param root where the project is: its folder, or a published game's pack (for names and messages)
+     */
+    public static GameProject read(ProjectFiles files, Path root) throws IOException {
+        List<String> lines = files.lines(FILE_NAME);
+        if (lines == null) {
+            throw new IOException(root + " has no " + FILE_NAME + ".");
+        }
+        Path folderName = root.toAbsolutePath().getFileName();
+        String name = folderName == null ? "Game" : folderName.toString();
         String start = null;
         ProjectSettings d = ProjectSettings.DEFAULT;
         SpriteRef npc = d.npcSprite();
@@ -186,6 +199,11 @@ public final class GameProject {
 
     public Path startMapFile() {
         return root.resolve(startMap);
+    }
+
+    /** The first map's path inside the project, such as {@code maps/b1f.txt}. */
+    public String startMap() {
+        return startMap;
     }
 
     public void setStartMap(Path mapFile) {

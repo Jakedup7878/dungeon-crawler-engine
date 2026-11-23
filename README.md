@@ -8,7 +8,10 @@ for building your own games. Plain Java 17+ and Swing; the game itself uses no o
 - **Double-click `run.cmd`** to play the sample game, or from PowerShell: `.\run.ps1`
 - Play a project: `.\run.ps1 "C:\Games\My Game"`, or a single map: `.\run.ps1 path\to\my-floor.txt`
 - **Map editor:** double-click `editor.cmd`, or `.\run.ps1 -Editor [project folder or map file]`
-- **Publish a game:** `.\publish.cmd "C:\Games\My Game"` (see [Projects and publishing](#projects-and-publishing))
+- **Map editor as a program:** double-click `build-editor.cmd`; it makes
+  `dist\Dungeon Crawler Editor\Dungeon Crawler Editor.exe` (see [The editor as a program](#the-editor-as-a-program))
+- **Publish a game:** **Project > Publish Game** in the editor, or `.\publish.cmd "C:\Games\My Game"`
+  (see [Projects and publishing](#projects-and-publishing))
 - **Tests:** double-click `test.cmd`, or `.\test.ps1` (see [Tests](#tests))
 - **IntelliJ:** open this folder (it imports `pom.xml`) and run `crawler.Main` (game) or
   `crawler.editor.MapEditor` (editor). The JUnit tests in `src/test/java` run from IntelliJ too.
@@ -92,6 +95,7 @@ With the Event, Chest or NPC tool, click an object to edit it, or drag it to ano
 | **Classes** | Fighter, Mage...: starting stats, **growth per level**, attack animation, portrait. With none, the game uses Fighter, Mage, Priest and Thief |
 | **Enemies** | Name, id, stats, experience, gold, **picture** (still or animated) and **attack animation** |
 | **Attack Animations** | An animation strip, its size and a **sound**, with a live preview |
+| **Publish Game** | Makes the game into a program players can run, with its files encrypted (see below) |
 
 ### Your own pictures and sounds
 
@@ -121,8 +125,40 @@ My Game/
 ```
 
 - **Project > Make This the Starting Map** picks the floor the game starts on.
-- **Publishing:** `.\publish.cmd "C:\Games\My Game"` builds `dist\My Game\My Game.exe`. Players don't need Java: it
-  brings its own. Zip the whole `dist\My Game` folder to share it.
+
+### Publishing
+
+**Project > Publish Game** (or `.\publish.cmd "C:\Games\My Game" [output folder]`) makes the game into a program:
+
+```
+My Game/
+  My Game.exe      players double-click this
+  runtime/         a private copy of Java, so players don't need to install it
+  app/
+    crawler.jar    the engine
+    game.pak       the whole project, encrypted
+```
+
+Zip the whole `My Game` folder to share it. Before writing anything, the publisher packs the game and loads it back
+from the pack, so a project with a problem (a missing map, a typo in a data file) is reported instead of published.
+Publishing again to the same place replaces the earlier copy; a folder that isn't a published game is never deleted.
+
+**Encryption.** Every map, picture, sound and data file goes into `game.pak`, encrypted with AES-256-GCM. Players
+can't open, browse or copy the files, and a `game.pak` that has been changed refuses to load. Your project folder
+stays as it is, so you keep editing normally. How far this goes: the game has to decrypt its own files to run, so the
+key travels with it. That stops casual copying and tampering, but someone determined who studies this engine's code
+(it's public) could still get the files out. No game that runs offline can do better.
+
+### The editor as a program
+
+`build-editor.cmd` builds `dist\Dungeon Crawler Editor\`, which runs on any Windows computer without Java or this
+source code. Copy or zip the folder to install it elsewhere. It holds:
+
+- `Dungeon Crawler Editor.exe`, the editor.
+- `Sample Quest.exe`, which plays the sample game. Publish Game copies this program for every game it makes, so the
+  packaged editor publishes in a few seconds and needs no JDK. (From source, the publisher first builds it with the
+  JDK's `jpackage`.)
+- `Sample Quest\`, the sample project, to open in the editor and learn from.
 
 Step-by-step explanations of how project folders, party members and enemies were added are in
 [docs/](docs/walkthrough-1-project-folder.md).
@@ -197,13 +233,14 @@ the test classes with "Battle" in their name.
 
 | Package          | What's in it |
 |------------------|--------------|
-| `crawler.core`   | Pure game logic and file formats, no Swing. `DungeonMap` (cells + shared edges, textures, objects, music, `Encounters`), `MapObject` / `ObjectType`, `SpriteRef`, `Surface`, `Direction`, `Party`, `MovementSystem`, `MoveAction` / `MoveResult`, `Exploration`, `MapLoader` / `MapWriter`, `Reachability`, `GameProject` / `ProjectSettings`, `PartyMember` / `CharacterClass` / `EnemyType` / `AttackAnimation` / `Stats`, `GameData` / `SectionFile` / `GameContent`. |
+| `crawler.core`   | Pure game logic and file formats, no Swing. `DungeonMap` (cells + shared edges, textures, objects, music, `Encounters`), `MapObject` / `ObjectType`, `SpriteRef`, `Surface`, `Direction`, `Party`, `MovementSystem`, `MoveAction` / `MoveResult`, `Exploration`, `MapLoader` / `MapWriter`, `Reachability`, `GameProject` / `ProjectSettings`, `PartyMember` / `CharacterClass` / `EnemyType` / `AttackAnimation` / `Stats`, `GameData` / `SectionFile` / `GameContent`, `ProjectFiles` (a project's files in a folder, a pack or the classpath), `GamePack` (encrypted game packs). |
+| `crawler.publish` | `Publisher` (makes a game program from a template plus the encrypted pack) and `PublishTool` (the same from the command line, for `publish.ps1`). |
 | `crawler.battle` | The battle rules, no Swing: `Battle` (rounds, turn order, damage, fleeing, rewards), `Fighter` (HP, levels), `BattleEvent`. |
 | `crawler.audio`  | `MusicPlayer` (looping music and sound effects, WAV through a Clip and MIDI through the Sequencer) and `AudioFiles` (checking files). Sound never stops the game: problems are logged and it stays quiet. |
 | `crawler.render` | `DungeonRenderer` (raycaster for thin walls plus billboard sprites, rendered at 320x240 and scaled up), `Camera`, `Textures`, `Sprite` (stills and animation strips) / `ObjectLooks` / `DefaultSprites` (how everything looks), `AssetSource` (where a game's files come from), `AutomapRenderer`. |
 | `crawler.game`   | `Game` ties the map, party and systems together: chests, NPCs, events, encounters, gold; `GameMessage`, `MessageLog`. |
 | `crawler.ui`     | `GameWindow`, `GamePanel` (60 Hz loop, layout, which screen gets the keys), `BattleScreen`, `PartyCreationScreen`, `Hud` (shared drawing), `InputHandler`. |
-| `crawler.editor` | The editor. `MapEdits`, `MapDocument` (undo), `MapCheck` (problems), `AssetStore` (imported files), `MapCanvas`, `SidePanel`, `EditorFrame`, the dialogs (`ObjectDialog`, `TextureDialog`, `SettingsDialogs`, `RosterDialog` with `PartyForm` / `ClassForm` / `EnemyForm` / `AnimationForm`), and pickers (`ImagePicker`, `SoundPicker`, `AnimationChooser`). |
+| `crawler.editor` | The editor. `MapEdits`, `MapDocument` (undo), `MapCheck` (problems), `AssetStore` (imported files), `MapCanvas`, `SidePanel`, `EditorFrame`, the dialogs (`ObjectDialog`, `TextureDialog`, `SettingsDialogs`, `PublishDialog`, `RosterDialog` with `PartyForm` / `ClassForm` / `EnemyForm` / `AnimationForm`), and pickers (`ImagePicker`, `SoundPicker`, `AnimationChooser`). |
 
 Movement is logical and instant: `MovementSystem.perform(action)` moves exactly one cell or turns exactly 90 degrees, then
 reports a `MoveResult` to every `MovementListener`. The camera animates afterwards, so game rules never depend on frame timing.

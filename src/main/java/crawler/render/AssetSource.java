@@ -1,11 +1,11 @@
 package crawler.render;
 
+import crawler.core.ProjectFiles;
+
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,20 +29,17 @@ public interface AssetSource {
 
     /** Files relative to a folder (the project folder, or the folder a lone map is in). */
     static AssetSource directory(Path folder) {
-        return cached(reference -> {
-            Path file = folder.resolve(reference);
-            return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
-        });
+        return of(ProjectFiles.folder(folder));
+    }
+
+    /** A project's files, wherever they are (a folder, a published game's pack, the classpath). */
+    static AssetSource of(ProjectFiles files) {
+        return cached(files::read);
     }
 
     /** Files on the classpath, relative to a resource folder such as {@code "/sample/"}. */
     static AssetSource classpath(String folder) {
-        String base = folder.endsWith("/") ? folder : folder + "/";
-        return cached(reference -> {
-            try (InputStream in = AssetSource.class.getResourceAsStream(base + reference)) {
-                return in == null ? null : in.readAllBytes();
-            }
-        });
+        return of(ProjectFiles.classpath(folder));
     }
 
     /** Reads each file once and remembers the result, including failures. */

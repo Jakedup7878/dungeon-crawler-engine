@@ -22,11 +22,16 @@ public record GameContent(ProjectSettings settings, List<PartyMember> party, Lis
 
     /** Reads everything from a project folder. */
     public static GameContent load(GameProject project) throws IOException {
-        return new GameContent(project.settings(),
-                GameData.loadParty(project.root()),
-                GameData.loadClasses(project.root()),
-                GameData.loadEnemies(project.root()),
-                GameData.loadAnimations(project.root()));
+        return load(project.settings(), ProjectFiles.folder(project.root()));
+    }
+
+    /** Reads everything from a project's files (a folder, a published game's pack, the classpath). */
+    public static GameContent load(ProjectSettings settings, ProjectFiles files) throws IOException {
+        return new GameContent(settings,
+                GameData.loadParty(files),
+                GameData.loadClasses(files),
+                GameData.loadEnemies(files),
+                GameData.loadAnimations(files));
     }
 
     /** The project's classes, or the built-in ones if it defines none. */

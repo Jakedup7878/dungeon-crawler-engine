@@ -235,6 +235,8 @@ final class EditorFrame extends JFrame {
         projectMenu.add(projectAction("Classes...", this::editClasses));
         projectMenu.add(projectAction("Enemies...", this::editEnemies));
         projectMenu.add(projectAction("Attack Animations...", this::editAnimations));
+        projectMenu.addSeparator();
+        projectMenu.add(projectAction("Publish Game...", this::publishGame));
         bar.add(projectMenu);
 
         JMenu test = menu("Test", KeyEvent.VK_S);
@@ -782,6 +784,32 @@ final class EditorFrame extends JFrame {
         status(chosen.encounters().active()
                 ? "Random battles: " + chosen.encounters().rate() + "% a step. F5 to try them. Ctrl+Z undoes it."
                 : "Map settings updated. Ctrl+Z undoes it.");
+    }
+
+    /** Makes the project into a program players can run, with its files encrypted. */
+    private void publishGame() {
+        if (doc.isDirty()) {
+            int answer = JOptionPane.showConfirmDialog(this,
+                    "Save this map first? The published game uses the saved files.", APP,
+                    JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (answer == JOptionPane.CANCEL_OPTION || answer == JOptionPane.CLOSED_OPTION
+                    || (answer == JOptionPane.YES_OPTION && !save())) {
+                return;
+            }
+        }
+        JFileChooser chooser = new JFileChooser(project.root().getParent().toFile());
+        chooser.setDialogTitle("Where should the published game go?");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        if (chooser.showDialog(this, "Publish Here") != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        Path output = chooser.getSelectedFile().toPath().toAbsolutePath();
+        if (output.startsWith(project.root())) {
+            JOptionPane.showMessageDialog(this, "Choose a folder outside the project, so the published game "
+                    + "doesn't end up inside its own files.", APP, JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        PublishDialog.run(this, project.root(), output);
     }
 
     // ------------------------------------------------------------ project content
