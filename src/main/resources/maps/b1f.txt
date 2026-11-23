@@ -1,0 +1,43 @@
+name: B1F - The Old Cellars
+; Sample floor, 12 x 10 cells.
+;
+; Each cell is 3 characters wide, with walls on the lines between cells:
+;   ---  or  |   wall          (blank)  open passage
+;   -D-  or  D   door          ###      solid rock (never entered)
+;   ^ > v <      where the party starts, and which way it faces
+;
+; Corner characters (+ or #) are ignored, so you can draw rock as a solid block.
+; Below the grid (after a blank line) come the floor's events, chests and NPCs.
++---+---+---+---+---+---+---+---+---+---+---+---+
+|           |###############|                   |
++   +---+   +---+---+---+---+   +   +   +   +   +
+|   |###|   D                                   |
++   +---+   +---+---+---+---+   +   +---+   +   +
+|           |###############|       |###|       |
++---+-D-+---+---+---+---+---+   +   +---+   +   +
+|###|   |###|               D                   |
++###+   +###+   +---+---+   +   +   +   +   +   +
+|###|   |###|   |#######|   |                   |
++###+   +---+   +#######+   +---+-D-+---+---+   +
+|###|           |#######|   |###|   |#######|   |
++###+   +---+   +---+---+   +###+   +#######+   +
+|###|   |###|               |###|   |#######|   |
++---+   +---+---+---+---+   +###+   +#######+   +
+|           |###########|   |###|   |#######|   |
++   +   +   +---+---+---+   +---+   +#######+   +
+|     ^     D                       |#######|   |
++   +   +   +---+---+---+---+---+---+---+---+   +
+|           |#######################|   D       |
++---+---+---+---+---+---+---+---+---+---+---+---+
+
+[event 3,8]
+name = A noise
+text = The door creaks shut behind you. Somewhere in the dark, something small skitters away.
+
+[chest 0,0]
+name = Dusty chest
+contents = A rusty key and 12 gold pieces.
+
+[npc 10,1]
+name = Old man
+text = Ah, a visitor! Few come down to the old cellars any more.\nMind the pillars, and mind the doors: not everything behind them is friendly.
