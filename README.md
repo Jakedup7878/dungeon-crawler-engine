@@ -31,7 +31,7 @@ battles, an NPC, a chest, an event, and a boss behind the closet door.
 | A / D           | Strafe left / right            | Choose a target              |
 | Q / E, Left / Right | Turn left / right          | Choose a target              |
 | X               | Turn around                    |                              |
-| Space / Enter   | Open or talk to what's in front; next page / close a message | Confirm; hurry the animations |
+| Space / Enter   | Open or talk to what's in front; take the stairs you stand on; next page / close a message | Confirm; hurry the animations |
 | Esc / Backspace |                                | Back to the previous member  |
 | I / Tab         | Items and equipment            |                              |
 | M               | Reveal the whole automap (debug) |                            |
@@ -51,6 +51,23 @@ such as a boss, that can't be run from. Battles are turn-based, Wizardry style:
    adding their class's growth to their stats. If the whole party falls, it's game over; Enter starts again.
 
 Damage is attack x (85% to 115%) minus half the target's defense, at least 1. The rules are in `crawler.battle.Battle`.
+
+## Floors
+
+Stairs join the maps of a project. Stepping onto them takes the party to another floor, and each floor remembers what
+has been explored, opened and triggered. In the editor, make another map (**File > New**, saved in the project's `maps`
+folder), then place **Stairs** (tool 9) and choose the floor they lead to and where the party arrives: that floor's
+start, one of its stairs, or any cell. Put stairs on both floors to go there and back. Stairs to the same floor work as
+a teleporter. A floor that's missing, or an arrival cell the party can't stand on, is reported before the game starts.
+
+## Enemy tiers
+
+Tag enemies with a **tier**, such as Common, Elite or Boss. **Project > Enemy Tiers** sets each tier's name and colour
+(shown in battle), how likely its enemies are in random battles, percentages that change their HP, attack, defense,
+speed, experience and gold, and whether battles with them can be run from. Give an enemy its tier in
+**Project > Enemies**. Random battles and event battles can name a whole tier, such as `tier:elite`, and item scripts
+can read `target.tier` (1 for the lowest tier, 0 for none). With no tiers of its own, a project has Common, Elite and
+Boss.
 
 ## Items
 
@@ -78,8 +95,9 @@ so anything you make there runs in the game, and you can still open the files in
 | **6 / V** Event   | Click a floor cell: a message (or battle) when the party steps there | Remove an event, chest or NPC |
 | **7 / T** Chest   | Click a floor cell: a chest to open          | Remove an event, chest or NPC   |
 | **8 / N** NPC     | Click a floor cell: someone to talk to       | Remove an event, chest or NPC   |
+| **9 / U** Stairs  | Click a floor cell: stairs to another floor  | Remove an event, chest, NPC or stairs |
 
-With the Event, Chest or NPC tool, click an object to edit it, or drag it to another cell.
+With the Event, Chest, NPC or Stairs tool, click an object to edit it, or drag it to another cell.
 
 - New maps start as solid rock with one open cell, so you dig the dungeon out. Dragging a corridor into a room
   breaks through its wall.
@@ -105,7 +123,8 @@ With the Event, Chest or NPC tool, click an object to edit it, or drag it to ano
 | **Settings** | Game name; whether players **create their own party**, and its size; starting gold and **items**; the default **NPC look** (instead of the spinning top) and chest looks; **battle music** and **victory music** |
 | **Party Members** | The ready-made party: name, class, level, stats, portrait |
 | **Classes** | Fighter, Mage...: starting stats, **growth per level**, attack animation, portrait. With none, the game uses Fighter, Mage, Priest and Thief |
-| **Enemies** | Name, id, stats, experience, gold, **picture** (still or animated) and **attack animation** |
+| **Enemy Tiers** | Tags such as Elite or Boss, with their colour, likelihood and stat changes |
+| **Enemies** | Name, id, **tier**, stats, experience, gold, **picture** (still or animated) and **attack animation** |
 | **Items** | Potions, weapons, armor, accessories and key items, each with a [script](docs/item-scripts.md) |
 | **Attack Animations** | An animation strip, its size and a **sound**, with a live preview |
 | **Publish Game** | Makes the game into a program players can run, with its files encrypted (see below) |
@@ -134,6 +153,7 @@ My Game/
   party.txt        the ready-made party        (Project > Party Members)
   classes.txt      the classes                 (Project > Classes)
   enemies.txt      the kinds of enemy          (Project > Enemies)
+  tiers.txt        the enemy tiers             (Project > Enemy Tiers)
   items.txt        the items and their scripts (Project > Items)
   animations.txt   the attack animations       (Project > Attack Animations)
 ```
@@ -222,6 +242,11 @@ items = potion x2, iron-sword
 sprite = assets/chest.png
 opened = assets/chest-open.png
 
+[stairs 9,9]
+to = maps/b2f.txt
+arrive = 1,1,east
+way = down
+
 [event 10,9]
 name = The Rat King
 text = Red eyes glint in the dark!
@@ -233,7 +258,7 @@ Cells are `x,y` from the top-left (0,0), and `\n` in text starts a new line. A p
 by `, N frames, F fps` for an animation strip. Paths are relative to the project folder (or, for a map outside any
 project, to the map file).
 
-`party.txt`, `classes.txt`, `enemies.txt`, `items.txt` and `animations.txt` use the same `[section]` and `key = value` style;
+`party.txt`, `classes.txt`, `enemies.txt`, `tiers.txt`, `items.txt` and `animations.txt` use the same `[section]` and `key = value` style;
 open the sample project's files to see them. Mistakes in any of these files are reported with the file and line.
 
 ## Tests
@@ -271,8 +296,8 @@ Battles work the same way: `Battle.playRound` decides everything at once, and `B
 - **New wall types** (locked doors, secret doors, one-way walls): add a constant to `EdgeType` with its
   passable / blocks-sight flags, give it a texture in `Textures.forEdge`, a map character in `MapLoader` and
   `MapWriter`, and an editor tool (`Tool`, handled in `MapCanvas.applyEdge`).
-- **Teleporters, stairs, pits**: `Party.place(x, y, facing)`, `MovementSystem.setMap(...)`, then `Camera.snapTo(party)`.
-- **More kinds of object** (stairs, signs, shops): add a constant to `ObjectType`, its keys to `MapLoader` /
+- **Pits, lifts and other ways between floors**: see `Game.travel`, `Destination` and `Floors`.
+- **More kinds of object** (signs, shops): add a constant to `ObjectType`, its keys to `MapLoader` /
   `MapWriter`, a default look in `ObjectLooks`, what it does in `Game.use` or `Game.onMovement`, and a `Tool`.
 - **New stats** (luck, ...): `Stats` (and its `read` / `write`), the `DEFAULT_STATS`, the `allow(...)` lists in
   `GameData`, and `StatFields`. Walkthrough 2 lists the steps.

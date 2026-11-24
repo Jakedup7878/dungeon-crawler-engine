@@ -68,6 +68,7 @@ public final class GamePanel extends JPanel {
 
     private static final double STEP_SECONDS = 0.18;
     private static final double TURN_SECONDS = 0.16;
+    private static final double FADE_SECONDS = 0.5;
     private static final double BUMP_SECONDS = 0.16;
 
     private final Supplier<Game> newGame;
@@ -92,6 +93,9 @@ public final class GamePanel extends JPanel {
     private int messagePages = 1;
     private BattleScreen battleScreen;
     private PartyCreationScreen creation;
+    /** Seconds left of the fade after taking stairs. */
+    private double fade;
+    private int travelsSeen;
     private InventoryScreen inventory;
 
     /** A game drawn with the built-in look only (used by tests). */
@@ -122,7 +126,7 @@ public final class GamePanel extends JPanel {
         input.bindCommand(this::toggleSmoothMovement, KeyEvent.VK_F);
         input.bindCommand(this::toggleSound, KeyEvent.VK_V);
         input.bindCommand(this::openInventory, KeyEvent.VK_I, KeyEvent.VK_TAB);
-        input.bindCommand(() -> game.interact(), KeyEvent.VK_SPACE, KeyEvent.VK_ENTER);
+        input.bindCommand(this::interact, KeyEvent.VK_SPACE, KeyEvent.VK_ENTER);
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -158,7 +162,7 @@ public final class GamePanel extends JPanel {
     private static Supplier<Game> restartable(Game first) {
         Game[] next = {first};
         return () -> {
-            Game game = next[0] != null ? next[0] : new Game(first.map(), first.content(), new Random());
+            Game game = next[0] != null ? next[0] : new Game(first.floors(), first.content(), new Random());
             next[0] = null;
             return game;
         };
@@ -167,6 +171,8 @@ public final class GamePanel extends JPanel {
     private void beginGame() {
         camera.snapTo(game.party());
         walkableCells = countWalkable(game.map());
+        travelsSeen = game.travels();
+        fade = 0;
         battleScreen = null;
         inventory = null;
         creation = offerPartyCreation && game.content().settings().partyCreation()
@@ -235,6 +241,7 @@ public final class GamePanel extends JPanel {
     /** Advances input and animation by {@code dt} seconds. */
     void update(double dt) {
         clock += dt;
+        fade = Math.max(0, fade - dt);
         input.update(dt);
         camera.update(dt);
         if (creation == null && battleScreen == null && game.battle() != null && game.message() == null) {
@@ -265,8 +272,32 @@ public final class GamePanel extends JPanel {
         }
     }
 
+    private void interact() {
+        if (!camera.isAnimating()) {
+            game.interact();
+            arrive();
+        }
+    }
+
+    /** If the party has just taken stairs, shows where it is now. True if it has. */
+    private boolean arrive() {
+        if (travelsSeen == game.travels()) {
+            return false;
+        }
+        travelsSeen = game.travels();
+        renderer.setTextures(Textures.forMap(game.map(), assets));
+        walkableCells = countWalkable(game.map());
+        camera.snapTo(game.party());
+        input.cancelRepeat();
+        fade = FADE_SECONDS;
+        return true;
+    }
+
     private void perform(MoveAction action) {
         MoveResult result = game.movement().perform(action);
+        if (arrive()) {
+            return;
+        }
         switch (result.outcome()) {
             case MOVED -> camera.moveTo(game.party(), smoothMovement ? STEP_SECONDS : 0);
             case TURNED -> camera.moveTo(game.party(), smoothMovement ? TURN_SECONDS : 0);
@@ -322,6 +353,10 @@ public final class GamePanel extends JPanel {
                     looks.billboards(game.map(), game::isOpened), clock);
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             g.drawImage(renderer.frame(), VIEW.x, VIEW.y, VIEW.width, VIEW.height, null);
+            if (fade > 0) {
+                g.setColor(new Color(0, 0, 0, (int) (255 * fade / FADE_SECONDS)));
+                g.fill(VIEW);
+            }
             drawFrame(g, VIEW);
             if (battleScreen != null) {
                 battleScreen.draw(g, VIEW);

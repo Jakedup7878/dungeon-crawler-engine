@@ -88,6 +88,14 @@ final class Icons {
                 g.setColor(new Color(236, 190, 70));
                 g.fillRect(8, 8, 3, 4);
             });
+            case STAIRS -> painted(g -> {
+                for (int i = 0; i < 4; i++) {
+                    g.setColor(new Color(150 - i * 22, 156 - i * 22, 178 - i * 22));
+                    g.fillRect(2 + i * 4, 3 + i * 3, 14 - i * 4, 4);
+                }
+                g.setColor(WALL);
+                g.drawPolyline(new int[]{2, 2, 6, 6, 10, 10, 14, 14, 16}, new int[]{16, 3, 3, 6, 6, 9, 9, 12, 12}, 9);
+            });
             case NPC -> painted(g -> {
                 Polygon body = new Polygon(new int[]{2, 16, 9}, new int[]{7, 7, 17}, 3);
                 g.setColor(new Color(40, 90, 220));

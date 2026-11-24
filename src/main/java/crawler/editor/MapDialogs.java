@@ -127,16 +127,17 @@ final class MapDialogs {
                 <tr><td><b>6 / V</b></td><td>Event: a message when the party steps on the cell. Invisible unless you give it an image.</td></tr>
                 <tr><td><b>7 / T</b></td><td>Chest: the party opens it by walking into it.</td></tr>
                 <tr><td><b>8 / N</b></td><td>NPC: someone to talk to by walking into them. Looks like a spinning top until you give it an image.</td></tr>
+                <tr><td><b>9 / U</b></td><td>Stairs: take the party to another floor of the project.</td></tr>
                 <tr><td><b>Right mouse</b></td><td>Does the opposite: fills with rock, removes walls, doors and objects.</td></tr>
                 </table>
-                <p>With the Event, Chest or NPC tool, click an object to edit it and drag it to move it.
+                <p>With the Event, Chest, NPC or Stairs tool, click an object to edit it and drag it to move it.
                 <b>Edit &gt; Textures</b> (Ctrl+T) sets your own wall, door, floor and ceiling images, and
                 <b>Edit &gt; Map Settings</b> (Ctrl+M) the floor's music and random battles.
                 Every picture and sound you choose is copied into the project's <code>assets</code> folder when you save.</p>
                 <h3>The rest of the game</h3>
                 <p>The <b>Project</b> menu holds what belongs to the whole game: <b>Settings</b> (party creation,
                 starting gold, the default NPC and chest looks, battle and victory music), <b>Party Members</b>,
-                <b>Classes</b>, <b>Enemies</b>, <b>Items</b> (potions, weapons and armor, with scripts of their own)
+                <b>Classes</b>, <b>Enemies</b>, <b>Enemy Tiers</b>, <b>Items</b> (potions, weapons and armor, with scripts of their own)
                 and <b>Attack Animations</b>. For an animation, put the frames side by side
                 in one image and set <b>Frames</b>.</p>
                 <h3>Getting around</h3>

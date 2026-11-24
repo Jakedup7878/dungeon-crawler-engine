@@ -28,7 +28,7 @@ class GameScreensTest {
 
     private void start(long seed, boolean partyCreation) throws IOException {
         Main.Loaded sample = Main.load(null);
-        panel = new GamePanel(() -> game = new Game(sample.map(), sample.content(), new Random(seed)),
+        panel = new GamePanel(() -> game = new Game(sample.floors(), sample.content(), new Random(seed)),
                 sample.assets(), partyCreation);
         panel.setSize(960, 640);
     }
@@ -63,7 +63,7 @@ class GameScreensTest {
     void theSampleGameLoadsAsAProject() throws IOException {
         Main.Loaded sample = Main.load(null);
         assertEquals("Sample Quest - B1F - The Old Cellars", sample.title());
-        assertEquals(3, sample.content().enemies().size());
+        assertEquals(4, sample.content().enemies().size());
         assertTrue(sample.map().encounters().active());
     }
 
@@ -186,5 +186,19 @@ class GameScreensTest {
             run(0.4);
             paint();
         }
+    }
+
+    @Test
+    void takingStairsShowsTheOtherFloor() throws IOException {
+        start(1, false);
+        game.party().place(9, 9, crawler.core.Direction.EAST);
+        key(KeyEvent.VK_SPACE);
+        assertEquals("B2F - The Flooded Vault", game.map().name());
+        paint();
+        run(1);
+        paint();
+        key(KeyEvent.VK_SPACE);
+        assertEquals("B1F - The Old Cellars", game.map().name());
+        paint();
     }
 }

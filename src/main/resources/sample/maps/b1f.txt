@@ -53,3 +53,9 @@ name = The Rat King
 text = Something huge stirs among the crates. Red eyes glint in the dark!
 once = yes
 battle = rat-king, giant-rat
+
+[stairs 9,9]
+name = You take the worn steps down
+to = maps/b2f.txt
+arrive = 1,1,east
+way = down

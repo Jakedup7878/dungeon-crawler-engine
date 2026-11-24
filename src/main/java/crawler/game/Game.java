@@ -4,11 +4,13 @@ import crawler.battle.Battle;
 import crawler.battle.BattleEvent;
 import crawler.battle.Effects;
 import crawler.battle.Fighter;
+import crawler.core.Destination;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
 import crawler.core.EnemyType;
 import crawler.core.Exploration;
+import crawler.core.Floors;
 import crawler.core.GameContent;
 import crawler.core.Inventory;
 import crawler.core.Item;
@@ -21,12 +23,14 @@ import crawler.core.MovementSystem;
 import crawler.core.ObjectType;
 import crawler.core.Party;
 import crawler.core.PartyMember;
+import crawler.core.Tier;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -42,16 +46,24 @@ import java.util.Set;
  * a {@link Battle}: random encounters set per map, or fixed battles set on events.
  */
 public final class Game {
-    private final DungeonMap map;
+    /** What's remembered about one floor. */
+    private record FloorState(Exploration exploration, Set<Integer> openedChests, Set<Integer> triggeredEvents) {
+        FloorState(DungeonMap map) {
+            this(new Exploration(map), new HashSet<>(), new HashSet<>());
+        }
+    }
+
+    private final Floors floors;
+    private final Map<String, FloorState> states = new HashMap<>();
+    private DungeonMap map;
+    private FloorState floor;
+    private int travels;
     private final GameContent content;
     private final Random random;
     private final Party party;
     private final MovementSystem movement;
-    private final Exploration exploration;
     private final MessageLog log = new MessageLog(50);
     private final Deque<GameMessage> messages = new ArrayDeque<>();
-    private final Set<Integer> openedChests = new HashSet<>();
-    private final Set<Integer> triggeredEvents = new HashSet<>();
     private final List<Fighter> heroes = new ArrayList<>();
     private final Inventory inventory = new Inventory();
     private Battle battle;
@@ -68,16 +80,23 @@ public final class Game {
      * @param random the dice for encounters and battles; pass a seeded one for repeatable tests
      */
     public Game(DungeonMap map, GameContent content, Random random) {
-        this.map = map;
+        this(Floors.single(map), content, random);
+    }
+
+    /** A game of several floors, joined by stairs. */
+    public Game(Floors floors, GameContent content, Random random) {
+        this.floors = floors;
+        this.map = floors.first();
+        this.floor = new FloorState(map);
+        states.put(floors.start(), floor);
         this.content = content;
         this.random = random;
         this.party = new Party(map.startX(), map.startY(), map.startFacing());
         this.movement = new MovementSystem(map, party);
-        this.exploration = new Exploration(map);
         this.gold = content.settings().startingGold();
         give(content.settings().startingItems());
         replaceParty(content.startingParty());
-        exploration.visit(party.x(), party.y());
+        floor.exploration().visit(party.x(), party.y());
         movement.addListener(this::onMovement);
         log.add("You enter " + map.name() + ".");
     }
@@ -86,13 +105,16 @@ public final class Game {
         switch (result.outcome()) {
             case MOVED -> {
                 steps++;
-                exploration.visit(result.toX(), result.toY());
+                floor.exploration().visit(result.toX(), result.toY());
                 if (result.edge() == EdgeType.DOOR) {
                     log.add("You pass through a door.");
                 }
                 MapObject here = map.object(result.toX(), result.toY());
                 if (here != null && here.type() == ObjectType.EVENT) {
                     trigger(here);
+                }
+                if (here != null && here.type() == ObjectType.STAIRS && travel(here)) {
+                    return; // nothing jumps out on the stairs
                 }
                 if (battle == null && map.encounters().active() && random.nextInt(100) < map.encounters().rate()) {
                     startRandomBattle();
@@ -114,6 +136,11 @@ public final class Game {
     public boolean interact() {
         Direction facing = party.facing();
         MapObject ahead = map.object(party.x() + facing.dx, party.y() + facing.dy);
+        MapObject here = map.object(party.x(), party.y());
+        boolean nothingAhead = ahead == null || !ahead.solid() || !map.edge(party.x(), party.y(), facing).passable;
+        if (nothingAhead && here != null && here.type() == ObjectType.STAIRS) {
+            return travel(here); // having just arrived on them, say
+        }
         if (ahead == null || !ahead.solid() || !map.edge(party.x(), party.y(), facing).passable) {
             log.add("There's nothing there.");
             return false;
@@ -125,7 +152,7 @@ public final class Game {
     private void use(MapObject object) {
         switch (object.type()) {
             case CHEST -> {
-                if (openedChests.add(index(object))) {
+                if (floor.openedChests().add(index(object))) {
                     log.add("You open the " + object.displayName().toLowerCase() + ".");
                     List<String> found = new ArrayList<>();
                     if (!object.text().isEmpty()) {
@@ -144,11 +171,47 @@ public final class Game {
                         object.text().isEmpty() ? "..." : object.text(), object));
             }
             case EVENT -> trigger(object);
+            case STAIRS -> travel(object);
         }
     }
 
+    /** Takes stairs to where they lead. False if that's nowhere. */
+    private boolean travel(MapObject stairs) {
+        Destination to = stairs.destination();
+        DungeonMap next = to.isSet() ? floors.get(to.map()) : null;
+        if (next == null || Floors.arrivalProblem(next, to) != null) {
+            log.add("The way is blocked.");
+            return false;
+        }
+        boolean sameFloor = next == map;
+        map = next;
+        floor = states.computeIfAbsent(to.map(), k -> new FloorState(next));
+        movement.setMap(next);
+        party.place(to.atStart() ? next.startX() : to.x(), to.atStart() ? next.startY() : to.y(),
+                to.atStart() ? next.startFacing() : to.facing());
+        floor.exploration().visit(party.x(), party.y());
+        travels++;
+        if (!sameFloor) {
+            log.add((stairs.name().isEmpty() ? "You go " + (to.up() ? "up" : "down") : stairs.name())
+                    + ": " + next.name() + ".");
+        }
+        if (!stairs.text().isEmpty()) {
+            messages.add(new GameMessage(stairs.name(), stairs.text(), stairs));
+        }
+        return true;
+    }
+
+    /** Counts the times the party has taken stairs, so the screen knows when it's somewhere else. */
+    public int travels() {
+        return travels;
+    }
+
+    public Floors floors() {
+        return floors;
+    }
+
     private void trigger(MapObject event) {
-        boolean first = triggeredEvents.add(index(event));
+        boolean first = floor.triggeredEvents().add(index(event));
         if (!first && event.once()) {
             return;
         }
@@ -161,9 +224,9 @@ public final class Game {
         if (!event.battle().isEmpty()) {
             List<EnemyType> enemies = new ArrayList<>();
             for (String id : event.battle()) {
-                EnemyType type = content.enemy(id);
-                if (type != null) {
-                    enemies.add(type);
+                List<EnemyType> choices = content.enemiesFor(id);
+                if (!choices.isEmpty()) { // a tier means any one of its enemies
+                    enemies.add(choices.size() == 1 ? choices.get(0) : pick(choices));
                 }
             }
             startBattle(enemies, false);
@@ -177,13 +240,11 @@ public final class Game {
     // ------------------------------------------------------------ battles
 
     private void startRandomBattle() {
-        List<EnemyType> table = new ArrayList<>();
+        Set<EnemyType> unique = new LinkedHashSet<>();
         for (String id : map.encounters().enemies()) {
-            EnemyType type = content.enemy(id);
-            if (type != null) {
-                table.add(type);
-            }
+            unique.addAll(content.enemiesFor(id));
         }
+        List<EnemyType> table = List.copyOf(unique);
         if (table.isEmpty()) {
             return;
         }
@@ -191,9 +252,27 @@ public final class Game {
         int count = min + random.nextInt(map.encounters().maxGroup() - min + 1);
         List<EnemyType> group = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            group.add(table.get(random.nextInt(table.size())));
+            group.add(pick(table));
         }
         startBattle(group, true);
+    }
+
+    /** One of these enemies: the heavier its tier's weight, the likelier. */
+    private EnemyType pick(List<EnemyType> from) {
+        int total = from.stream().mapToInt(this::weight).sum();
+        int roll = random.nextInt(total);
+        for (EnemyType type : from) {
+            roll -= weight(type);
+            if (roll < 0) {
+                return type;
+            }
+        }
+        throw new AssertionError();
+    }
+
+    private int weight(EnemyType type) {
+        Tier tier = content.tier(type.tier());
+        return tier == null ? Tier.DEFAULT_WEIGHT : tier.weight();
     }
 
     /**
@@ -216,7 +295,9 @@ public final class Game {
                 int n = seen.merge(type.id(), 1, Integer::sum);
                 name += " " + (char) ('A' + n - 1);
             }
-            fighters.add(Fighter.enemy(type, name));
+            Tier tier = content.tier(type.tier());
+            fighters.add(Fighter.enemy(type, name, tier, content.tierRank(type.tier())));
+            canFlee &= tier == null || tier.canFlee();
         }
         battle = new Battle(heroes, fighters, canFlee, random, inventory);
         log.add(fighters.size() == 1 ? fighters.get(0).name() + " attacks!" : "Monsters attack!");
@@ -398,7 +479,7 @@ public final class Game {
 
     /** Whether the party has opened this chest. */
     public boolean isOpened(MapObject object) {
-        return object.type() == ObjectType.CHEST && openedChests.contains(index(object));
+        return object.type() == ObjectType.CHEST && floor.openedChests().contains(index(object));
     }
 
     public DungeonMap map() {
@@ -414,7 +495,7 @@ public final class Game {
     }
 
     public Exploration exploration() {
-        return exploration;
+        return floor.exploration();
     }
 
     public MessageLog log() {

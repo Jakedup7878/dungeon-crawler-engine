@@ -301,7 +301,7 @@ final class MapCanvas extends JComponent implements Scrollable {
                 applyEdge(edge, primary);
             }
             case START -> clickStart(cx, cy, primary);
-            case EVENT, CHEST, NPC -> {
+            case EVENT, CHEST, NPC, STAIRS -> {
                 anchorX = lastCellX = cx;
                 anchorY = lastCellY = cy;
                 if (primary) {
@@ -337,7 +337,7 @@ final class MapCanvas extends JComponent implements Scrollable {
             case CORRIDOR -> corridorTo(cx, cy, primary);
             case WALL, DOOR -> dragEdges(fx, fy, primary);
             case START -> { }
-            case EVENT, CHEST, NPC -> {
+            case EVENT, CHEST, NPC, STAIRS -> {
                 if (!primary && (cx != lastCellX || cy != lastCellY)) {
                     removeObject(cx, cy);
                 }

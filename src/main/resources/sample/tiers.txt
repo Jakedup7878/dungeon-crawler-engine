@@ -1,0 +1,22 @@
+; The tiers enemies can be tagged with, lowest first. hp to gold are percentages of each enemy's
+; own numbers; weight is how likely its enemies are in random battles.
+
+[tier common]
+name = Common
+color = dee0e8
+weight = 10
+
+[tier elite]
+name = Elite
+color = 6eb4ff
+weight = 3
+hp = 130
+attack = 110
+exp = 150
+gold = 200
+
+[tier boss]
+name = Boss
+color = ff7850
+weight = 1
+flee = no

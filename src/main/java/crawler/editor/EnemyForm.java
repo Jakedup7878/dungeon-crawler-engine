@@ -2,8 +2,10 @@ package crawler.editor;
 
 import crawler.core.AttackAnimation;
 import crawler.core.EnemyType;
+import crawler.core.Tier;
 import crawler.render.ObjectLooks;
 
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JSpinner;
@@ -20,18 +22,27 @@ final class EnemyForm implements RosterDialog.Form<EnemyType> {
     private final StatFields stats = new StatFields();
     private final JSpinner exp = StatFields.spinner(0, 999_999);
     private final JSpinner gold = StatFields.spinner(0, 999_999);
+    private final List<Tier> tiers;
+    private final JComboBox<String> tier = new JComboBox<>();
+    /** A tier that no longer exists, kept until another is chosen. */
+    private String missingTier;
     private final ImagePicker sprite;
     private final AnimationChooser animation;
     private final JComponent component;
 
-    EnemyForm(AssetStore assets, List<AttackAnimation> animations) {
+    EnemyForm(AssetStore assets, List<AttackAnimation> animations, List<Tier> tiers) {
+        this.tiers = tiers;
+        tier.addItem("No tier");
+        tiers.forEach(t -> tier.addItem(t.displayName() + "  [" + t.id() + "]"));
+        tier.setToolTipText("Make tiers in Project > Enemy Tiers");
         id.setToolTipText("How maps refer to this enemy. Leave empty to make one from the name.");
         sprite = new ImagePicker(assets, null, ObjectLooks.defaultEnemy("enemy").image(0),
                 "Built-in blob (a colour of its own per enemy)", true);
         animation = new AnimationChooser(animations);
         List<JComponent> rows = new ArrayList<>(List.of(
                 new JLabel("Name"), name,
-                new JLabel("Id"), id));
+                new JLabel("Id"), id,
+                new JLabel("Tier"), tier));
         rows.addAll(List.of(stats.rows()));
         rows.addAll(List.of(
                 new JLabel("Experience"), exp,
@@ -51,6 +62,22 @@ final class EnemyForm implements RosterDialog.Form<EnemyType> {
         id.setText(enemy.id());
         name.setText(enemy.name());
         stats.show(enemy.stats());
+        missingTier = null;
+        while (tier.getItemCount() > tiers.size() + 1) {
+            tier.removeItemAt(tier.getItemCount() - 1);
+        }
+        int index = 0;
+        for (int i = 0; i < tiers.size(); i++) {
+            if (tiers.get(i).id().equals(enemy.tier())) {
+                index = i + 1;
+            }
+        }
+        if (enemy.tier() != null && index == 0) {
+            missingTier = enemy.tier();
+            tier.addItem(missingTier + "  (missing)");
+            index = tier.getItemCount() - 1;
+        }
+        tier.setSelectedIndex(index);
         exp.setValue(enemy.exp());
         gold.setValue(enemy.gold());
         animation.setAnimation(enemy.attackAnimation());
@@ -63,8 +90,10 @@ final class EnemyForm implements RosterDialog.Form<EnemyType> {
         if (typedId.isEmpty()) {
             typedId = EnemyType.idFor(name.getText());
         }
+        int index = tier.getSelectedIndex();
+        String tierId = index <= 0 ? null : index <= tiers.size() ? tiers.get(index - 1).id() : missingTier;
         return new EnemyType(typedId, name.getText(), stats.read(),
-                StatFields.value(exp), StatFields.value(gold), sprite.sprite(), animation.animation());
+                StatFields.value(exp), StatFields.value(gold), sprite.sprite(), animation.animation(), tierId);
     }
 
     @Override
@@ -74,7 +103,8 @@ final class EnemyForm implements RosterDialog.Form<EnemyType> {
 
     @Override
     public String label(EnemyType enemy) {
-        return (enemy.name().isEmpty() ? "(no name)" : enemy.name()) + "  [" + enemy.id() + "]";
+        return (enemy.name().isEmpty() ? "(no name)" : enemy.name()) + "  [" + enemy.id() + "]"
+                + (enemy.tier() == null ? "" : "  " + enemy.tier());
     }
 
     @Override

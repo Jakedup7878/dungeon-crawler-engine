@@ -51,6 +51,9 @@ import java.util.regex.Pattern;
  *       {@code battle} (enemy ids to fight there).</li>
  *   <li>{@code [chest x,y]}: {@code name}, {@code contents}, {@code items} (such as
  *       {@code potion x2, iron-sword}), {@code sprite}, {@code opened}.</li>
+ *   <li>{@code [stairs x,y]}: {@code name}, {@code text}, {@code sprite}, {@code to} (the floor's file, such as
+ *       {@code maps/b2f.txt}), {@code arrive} ({@code start}, or {@code 3,4,north}), {@code way} ({@code up} or
+ *       {@code down}, for the built-in look).</li>
  *   <li>{@code [npc x,y]}: {@code name}, {@code text}, {@code sprite}.</li>
  * </ul>
  * Image paths are relative to the map file. In text, {@code \n} starts a new line.
@@ -64,7 +67,8 @@ public final class MapLoader {
     private static final Map<ObjectType, Set<String>> OBJECT_KEYS = Map.of(
             ObjectType.EVENT, Set.of("name", "text", "once", "sprite", "battle"),
             ObjectType.CHEST, Set.of("name", "contents", "items", "sprite", "opened"),
-            ObjectType.NPC, Set.of("name", "text", "sprite"));
+            ObjectType.NPC, Set.of("name", "text", "sprite"),
+            ObjectType.STAIRS, Set.of("name", "text", "sprite", "to", "arrive", "way"));
 
     private MapLoader() {
     }
@@ -284,7 +288,7 @@ public final class MapLoader {
         ObjectType type = ObjectType.byKey(section.kind());
         if (type == null) {
             throw error(source, section.line(), "unknown section [" + section.kind()
-                    + "] (use [textures], [event x,y], [chest x,y] or [npc x,y])");
+                    + "] (use [textures], [event x,y], [chest x,y], [npc x,y] or [stairs x,y])");
         }
         int x = section.x();
         int y = section.y();
@@ -331,9 +335,19 @@ public final class MapLoader {
         } catch (IllegalArgumentException e) {
             throw error(source, section.keyLines().get("items"), e.getMessage());
         }
+        String way = v.getOrDefault("way", "down").strip().toLowerCase();
+        if (!way.equals("up") && !way.equals("down")) {
+            throw error(source, section.keyLines().get("way"), "way should be up or down");
+        }
+        Destination destination;
+        try {
+            destination = Destination.parse(v.get("to"), v.get("arrive"), way.equals("up"));
+        } catch (IllegalArgumentException e) {
+            throw error(source, section.keyLines().get("arrive"), e.getMessage());
+        }
         map.putObject(new MapObject(type, x, y, v.getOrDefault("name", ""), text,
                 SpriteRef.parse(v.get("sprite")), SpriteRef.parse(v.get("opened")), once,
-                Encounters.parseIds(v.get("battle")), items));
+                Encounters.parseIds(v.get("battle")), items, destination));
     }
 
     /** {@code \n} is a line break and {@code \\} a backslash. */

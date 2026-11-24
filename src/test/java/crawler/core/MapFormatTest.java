@@ -35,7 +35,7 @@ class MapFormatTest {
         assertEquals(EdgeType.DOOR, map.edge(1, 2, Direction.SOUTH));
         assertEquals(EdgeType.DOOR, map.edge(1, 3, Direction.NORTH), "both cells see the same door");
         assertEquals(CellType.ROCK, map.cell(1, 1));
-        assertEquals(4, map.objects().size());
+        assertEquals(5, map.objects().size());
     }
 
     @Test

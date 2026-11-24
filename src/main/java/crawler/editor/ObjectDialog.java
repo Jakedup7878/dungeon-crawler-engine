@@ -1,5 +1,8 @@
 package crawler.editor;
 
+import crawler.core.Destination;
+import crawler.core.Direction;
+import crawler.core.DungeonMap;
 import crawler.core.Encounters;
 import crawler.core.ItemStack;
 import crawler.core.MapObject;
@@ -7,6 +10,7 @@ import crawler.core.ObjectType;
 import crawler.render.ObjectLooks;
 
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -19,9 +23,11 @@ import javax.swing.event.AncestorListener;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-/** Edits an event, chest or NPC: its name, its text, its pictures and (for events) a battle. */
+/** Edits an event, chest, NPC or staircase: its name, its text, its pictures, and what it does. */
 final class ObjectDialog {
     private ObjectDialog() {
     }
@@ -32,9 +38,10 @@ final class ObjectDialog {
      * @param looks    the game's looks, so the built-in pictures shown are the project's defaults
      * @param enemyIds the enemy ids the project knows, to suggest for event battles (may be empty)
      * @param itemIds  the same for items, for chests
+     * @param floors   the project's floors by file, for stairs (null values can't be read)
      */
     static MapObject show(Component parent, MapObject object, boolean isNew, AssetStore assets,
-                          ObjectLooks looks, List<String> enemyIds, List<String> itemIds) {
+                          ObjectLooks looks, List<String> enemyIds, List<String> itemIds, Map<String, DungeonMap> floors) {
         ObjectType type = object.type();
         JTextField name = new JTextField(object.name(), 28);
         JTextArea text = new JTextArea(object.text(), 6, 36);
@@ -45,6 +52,7 @@ final class ObjectDialog {
         JTextField items = new JTextField(ItemStack.text(object.items()), 28);
         ImagePicker sprite = new ImagePicker(assets, null, defaultImage(type, false, looks), switch (type) {
             case EVENT -> "None: the event can't be seen";
+            case STAIRS -> "Built-in stairs, up or down";
             case CHEST -> "The game's chest";
             case NPC -> "The game's NPC look";
         }, true);
@@ -56,7 +64,45 @@ final class ObjectDialog {
             opened.setSprite(object.openSprite());
         }
 
+        Destination current = object.destination();
+        JComboBox<String> floor = new JComboBox<>(floors.keySet().stream().sorted().toArray(String[]::new));
+        floor.setEditable(true);
+        floor.setSelectedItem(current.map());
+        JComboBox<String> arrive = new JComboBox<>();
+        arrive.setEditable(true);
+        Runnable offerArrivals = () -> {
+            arrive.removeAllItems();
+            arrive.addItem("start");
+            DungeonMap chosen = floors.get(String.valueOf(floor.getEditor().getItem()).strip());
+            if (chosen != null) {
+                arrivals(chosen).forEach(arrive::addItem);
+            }
+        };
+        offerArrivals.run();
+        arrive.setSelectedItem(current.arrivalText());
+        floor.addActionListener(e -> {
+            offerArrivals.run();
+            // On another floor the old cell means nothing; its first stairs are the likeliest way in.
+            arrive.setSelectedIndex(arrive.getItemCount() > 1 ? 1 : 0);
+        });
+        JComboBox<String> way = new JComboBox<>(new String[]{"Down", "Up"});
+        way.setSelectedIndex(current.up() ? 1 : 0);
+
         JPanel form = switch (type) {
+            case STAIRS -> MapDialogs.form(
+                    new JLabel("Name"), name,
+                    new JLabel(), hint("Shown in the log when the party takes them. May be empty."),
+                    new JLabel("Leads to"), floor,
+                    new JLabel(), hint(floors.isEmpty() ? "The other floor's file, such as maps/b2f.txt. Save this map in a "
+                            + "project to choose from a list." : "The floor's file. To make a new floor: File > New, "
+                            + "then save it in the project's maps folder. The same floor works too, as a teleporter."),
+                    new JLabel("Arrive at"), arrive,
+                    new JLabel(), hint("'start' (that floor's start), or a cell and a direction to face, like 3,4,north. "
+                            + "The list offers that floor's stairs."),
+                    new JLabel("Looks like"), way,
+                    new JLabel("Message"), new JScrollPane(text),
+                    new JLabel(), hint("Shown on arrival. Leave empty for none."),
+                    new JLabel("Picture"), sprite);
             case EVENT -> MapDialogs.form(
                     new JLabel("Title"), name,
                     new JLabel("Message"), new JScrollPane(text),
@@ -65,7 +111,7 @@ final class ObjectDialog {
                     new JLabel("Battle"), battle,
                     new JLabel(), hint(enemyIds.isEmpty()
                             ? "Enemy ids to fight here, comma separated (a boss, say). Make enemies in Project > Enemies."
-                            : "Enemy ids to fight here, comma separated, such as " + String.join(", ",
+                            : "Enemy ids to fight here, comma separated (or tier:boss for any boss), such as " + String.join(", ",
                             enemyIds.subList(0, Math.min(3, enemyIds.size()))) + ". Leave empty for no battle."),
                     new JLabel("Picture"), sprite,
                     new JLabel(), hint("Give an event a picture to make it visible, like a fountain or a sign."));
@@ -90,6 +136,7 @@ final class ObjectDialog {
         focusWhenShown(name);
         String title = (isNew ? "New " : "") + type.displayName + " at " + object.x() + ", " + object.y();
         List<ItemStack> stacks = null;
+        Destination destination = Destination.NONE;
         while (stacks == null) {
             int answer = JOptionPane.showConfirmDialog(parent, new Object[]{form, hint(note)}, title,
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
@@ -97,6 +144,8 @@ final class ObjectDialog {
                 return null;
             }
             try {
+                destination = Destination.parse(String.valueOf(floor.getEditor().getItem()),
+                        String.valueOf(arrive.getEditor().getItem()), way.getSelectedIndex() == 1);
                 stacks = ItemStack.parse(items.getText());
             } catch (IllegalArgumentException e) { // ask again, with everything as it was typed
                 JOptionPane.showMessageDialog(parent, e.getMessage(), title, JOptionPane.WARNING_MESSAGE);
@@ -104,12 +153,31 @@ final class ObjectDialog {
         }
         return new MapObject(type, object.x(), object.y(), name.getText(), text.getText(),
                 sprite.sprite(), opened == null ? null : opened.sprite(), once.isSelected(),
-                Encounters.parseIds(battle.getText()), stacks);
+                Encounters.parseIds(battle.getText()), stacks, destination);
+    }
+
+    /** Where stairs on a floor can be arrived at, facing a side the party can walk off. */
+    static List<String> arrivals(DungeonMap map) {
+        List<String> out = new ArrayList<>();
+        for (MapObject o : map.objects()) {
+            if (o.type() == ObjectType.STAIRS) {
+                Direction facing = Direction.NORTH;
+                for (Direction d : Direction.values()) {
+                    if (map.canStep(o.x(), o.y(), d)) {
+                        facing = d;
+                        break;
+                    }
+                }
+                out.add(new Destination("", o.x(), o.y(), facing, false).arrivalText());
+            }
+        }
+        return out;
     }
 
     private static BufferedImage defaultImage(ObjectType type, boolean open, ObjectLooks looks) {
         return switch (type) {
             case EVENT -> null;
+            case STAIRS -> ObjectLooks.defaultStairs(false).image(0);
             case CHEST -> looks.chest(open).image(0);
             case NPC -> looks.npc().image(0);
         };

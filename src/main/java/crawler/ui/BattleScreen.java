@@ -533,8 +533,8 @@ final class BattleScreen {
         int count = enemies.size();
         int slot = Math.min(200, (view.width - 40) / count);
         int left = view.x + (view.width - slot * count) / 2;
-        int baseline = view.y + view.height - 190; // leaves room below for the command box
-        int maxHeight = 200;
+        int baseline = view.y + view.height - 194; // leaves room below for the command box
+        int maxHeight = 196;
         Fighter targeted = targeted();
 
         for (int i = 0; i < count; i++) {
@@ -549,7 +549,7 @@ final class BattleScreen {
                 alpha = (float) (1 - gone);
             }
             int centreX = left + slot * i + slot / 2;
-            Rectangle box = new Rectangle(centreX - (slot - 16) / 2, baseline - maxHeight, slot - 16, maxHeight);
+            Rectangle box = new Rectangle(centreX - (slot - 16) / 2, baseline - maxHeight - (enemy.tier() == null ? 0 : 6), slot - 16, maxHeight);
             // The attacker lunges forward; whoever is hit shakes.
             if (current instanceof BattleEvent.Attack attack) {
                 if (attack.attacker() == enemy && eventTime < 0.3) {
@@ -571,9 +571,13 @@ final class BattleScreen {
             }
 
             g.setFont(Hud.SMALL_FONT);
-            g.setColor(enemy == targeted ? Hud.HIGHLIGHT : Hud.TEXT);
-            Hud.centered(g, Hud.fit(g, enemy.name(), slot - 8), centreX, baseline + 20);
-            Hud.bar(g, centreX - (slot - 40) / 2, baseline + 28, slot - 40, 7, shownHp(enemy), enemy.stats().hp());
+            if (enemy.tier() != null) {
+                g.setColor(new Color(enemy.tier().color()));
+                Hud.centered(g, Hud.fit(g, enemy.tier().displayName(), slot - 8), centreX, baseline + 6);
+            }
+            g.setColor(enemy == targeted ? Hud.HIGHLIGHT : enemy.tier() == null ? Hud.TEXT : new Color(enemy.tier().color()));
+            Hud.centered(g, Hud.fit(g, enemy.name(), slot - 8), centreX, baseline + 22);
+            Hud.bar(g, centreX - (slot - 40) / 2, baseline + 30, slot - 40, 7, shownHp(enemy), enemy.stats().hp());
             if (enemy == targeted && (int) (clock * 3) % 2 == 0) {
                 g.setColor(Hud.HIGHLIGHT);
                 g.fillPolygon(new int[]{centreX - 9, centreX + 9, centreX},

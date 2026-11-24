@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Encrypted game packs, loading games from them, and publishing. */
 class PublishingTest {
     private static final List<String> SAMPLE_FILES =
-            List.of("project.txt", "maps/b1f.txt", "party.txt", "classes.txt", "enemies.txt");
+            List.of("project.txt", "maps/b1f.txt", "maps/b2f.txt", "party.txt", "classes.txt", "enemies.txt", "tiers.txt", "items.txt");
 
     @TempDir
     Path folder;
@@ -93,7 +93,7 @@ class PublishingTest {
         Files.write(pak, GamePack.pack(project));
         Main.Loaded game = Main.load(pak);
         assertEquals("Sample Quest - B1F - The Old Cellars", game.title());
-        assertEquals(3, game.content().enemies().size());
+        assertEquals(4, game.content().enemies().size());
         assertNull(GamePack.read(pak).read(".git/HEAD"));
         assertNotNull(GamePack.read(pak).read("maps/b1f.txt"));
     }

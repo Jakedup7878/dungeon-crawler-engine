@@ -35,6 +35,8 @@ final class MapDocument {
     private Set<String> knownEnemies;
     /** The same for items. */
     private Set<String> knownItems;
+    /** The project's floors by file, for checking stairs. */
+    private java.util.Map<String, DungeonMap> floors;
 
     /** @param assets where the map's images are looked up, for the checks */
     MapDocument(DungeonMap map, Path file, AssetSource assets) {
@@ -69,7 +71,7 @@ final class MapDocument {
 
     MapCheck check() {
         if (check == null) {
-            check = MapCheck.of(map, assets, knownEnemies, knownItems);
+            check = MapCheck.of(map, assets, knownEnemies, knownItems, floors);
         }
         return check;
     }
@@ -159,6 +161,12 @@ final class MapDocument {
     /** The project's item ids (null for none known), so the checks can spot typos in chests. */
     void setKnownItems(Set<String> ids) {
         knownItems = ids == null ? null : Set.copyOf(ids);
+        changed();
+    }
+
+    /** The project's floors by file (null for none known), so the checks can follow stairs. */
+    void setFloors(java.util.Map<String, DungeonMap> floors) {
+        this.floors = floors;
         changed();
     }
 

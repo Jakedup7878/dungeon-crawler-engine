@@ -82,6 +82,7 @@ public final class Effects implements Script.Host {
             case "defense" -> f.stats().defense();
             case "speed" -> f.stats().speed();
             case "level" -> f.level();
+            case "tier" -> f.tierRank();
             case "alive" -> f.alive() ? 1 : 0;
             case "poisoned" -> f.poisoned() ? 1 : 0;
             case "stunned" -> f.stunned() ? 1 : 0;

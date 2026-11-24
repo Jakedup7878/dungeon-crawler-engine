@@ -144,7 +144,7 @@ final class SidePanel extends JComponent {
             y = line(g, check.floorCells() + " floor cells, " + check.reachableCells() + " reachable",
                     TEXT_FONT, TEXT, x, y);
             y = line(g, count(check.events(), "event") + ", " + count(check.chests(), "chest") + ", "
-                    + count(check.npcs(), "NPC"), TEXT_FONT, TEXT, x, y);
+                    + count(check.npcs(), "NPC") + ", " + check.stairs() + " stairs", TEXT_FONT, TEXT, x, y);
             List<String> custom = new ArrayList<>();
             for (Surface surface : map.textures().keySet()) {
                 custom.add(surface.displayName.toLowerCase());

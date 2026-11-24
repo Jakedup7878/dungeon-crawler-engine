@@ -85,7 +85,7 @@ final class MapEdits {
      */
     static String objectProblem(DungeonMap map, ObjectType type, int x, int y) {
         if (!map.inBounds(x, y) || !map.cell(x, y).walkable) {
-            return "Events, chests and NPCs go on floor cells.";
+            return "Events, chests, NPCs and stairs go on floor cells.";
         }
         if (map.object(x, y) != null) {
             return "There's already " + map.object(x, y).type().withArticle() + " on that cell.";

@@ -1,8 +1,10 @@
 package crawler.editor;
 
+import crawler.core.Destination;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
+import crawler.core.Floors;
 import crawler.core.ItemStack;
 import crawler.core.MapObject;
 import crawler.core.ObjectType;
@@ -11,6 +13,7 @@ import crawler.render.AssetSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -21,24 +24,31 @@ import java.util.Set;
  * @param unreachable floor cells the party can't walk to from the start, indexed {@code y * width + x}
  * @param playable    whether the game can start on this map (there is floor, and the start is on it)
  */
-record MapCheck(int floorCells, int reachableCells, int doors, int events, int chests, int npcs,
+record MapCheck(int floorCells, int reachableCells, int doors, int events, int chests, int npcs, int stairs,
                 boolean[] unreachable, List<String> problems, boolean playable) {
     private static final int MAX_LISTED = 3;
 
     static MapCheck of(DungeonMap map, AssetSource assets) {
-        return of(map, assets, null, null);
+        return of(map, assets, null, null, null);
     }
 
     static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies) {
-        return of(map, assets, knownEnemies, null);
+        return of(map, assets, knownEnemies, null, null);
+    }
+
+    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies, Set<String> knownItems) {
+        return of(map, assets, knownEnemies, knownItems, null);
     }
 
     /**
+     * @param floors       the project's floors by file (null values can't be read), to check where stairs lead;
+     *                     null to skip that
      * @param knownItems   ids of the project's items, to check chests the same way; null to skip that
      * @param knownEnemies ids of the project's enemies, to point out encounters and event battles
      *                     naming enemies that don't exist; null to skip that check
      */
-    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies, Set<String> knownItems) {
+    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies, Set<String> knownItems,
+                       Map<String, DungeonMap> floors) {
         int width = map.width();
         int height = map.height();
         List<String> problems = new ArrayList<>();
@@ -94,6 +104,19 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
                 stuck.add("The " + object.type().lowerName() + where + " (" + object.displayName()
                         + ") can't be reached: no open side faces a reachable cell.");
             }
+            if (object.type() == ObjectType.STAIRS) {
+                Destination to = object.destination();
+                if (!to.isSet()) {
+                    stuck.add("The stairs" + where + " don't lead anywhere yet.");
+                } else if (floors != null && !floors.containsKey(to.map())) {
+                    stuck.add("The stairs" + where + " lead to " + to.map() + ", which doesn't exist.");
+                } else if (floors != null && floors.get(to.map()) != null) {
+                    String problem = Floors.arrivalProblem(floors.get(to.map()), to);
+                    if (problem != null) {
+                        stuck.add("The stairs" + where + " " + problem);
+                    }
+                }
+            }
             if (object.type() == ObjectType.EVENT && object.text().isEmpty()) {
                 stuck.add("The event" + where + " has no message, so nothing will happen there.");
             }
@@ -143,6 +166,7 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
 
         return new MapCheck(floor, reachable, doors, counts[ObjectType.EVENT.ordinal()],
                 counts[ObjectType.CHEST.ordinal()], counts[ObjectType.NPC.ordinal()],
+                counts[ObjectType.STAIRS.ordinal()],
                 unreachable, List.copyOf(problems), floor > 0 && startOnFloor);
     }
 

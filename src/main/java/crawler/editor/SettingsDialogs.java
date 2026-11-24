@@ -6,6 +6,7 @@ import crawler.core.EnemyType;
 import crawler.core.GameProject;
 import crawler.core.ItemStack;
 import crawler.core.ProjectSettings;
+import crawler.core.Tier;
 import crawler.render.ObjectLooks;
 
 import javax.swing.BorderFactory;
@@ -42,8 +43,10 @@ final class SettingsDialogs {
      * Music and random battles for one map; null if cancelled.
      *
      * @param enemies the project's enemies, to tick; empty when there is no project
+     * @param tiers   its tiers: those with enemies can be ticked as a whole
      */
-    static MapSettings mapSettings(Component parent, DungeonMap map, AssetStore assets, List<EnemyType> enemies) {
+    static MapSettings mapSettings(Component parent, DungeonMap map, AssetStore assets, List<EnemyType> enemies,
+                                   List<Tier> tiers) {
         SoundPicker music = new SoundPicker(assets, map.music(), "No music");
         Encounters current = map.encounters();
         JSpinner rate = StatFields.spinner(0, 100);
@@ -58,6 +61,12 @@ final class SettingsDialogs {
         for (EnemyType enemy : enemies) {
             String label = (enemy.name().isEmpty() ? enemy.id() : enemy.name()) + "  [" + enemy.id() + "]";
             boxes.put(enemy.id(), new JCheckBox(label, current.enemies().contains(enemy.id())));
+        }
+        for (Tier tier : tiers) {
+            if (enemies.stream().anyMatch(e -> tier.id().equals(e.tier()))) {
+                String id = Tier.PREFIX + tier.id();
+                boxes.put(id, new JCheckBox("Every " + tier.displayName() + " enemy  [" + id + "]", current.enemies().contains(id)));
+            }
         }
         for (String id : current.enemies()) {
             boxes.computeIfAbsent(id, k -> new JCheckBox(k + "  (missing: not in Project > Enemies)", true));

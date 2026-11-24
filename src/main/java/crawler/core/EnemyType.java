@@ -9,14 +9,22 @@ import java.util.Locale;
  * @param gold            gold it drops
  * @param sprite          its picture (possibly an animation strip), or null for the built-in blob
  * @param attackAnimation id of an {@link AttackAnimation}, or null for the built-in claw
+ * @param tier            id of the {@link Tier} it's tagged with, or null for none
  */
-public record EnemyType(String id, String name, Stats stats, int exp, int gold, SpriteRef sprite, String attackAnimation) {
+public record EnemyType(String id, String name, Stats stats, int exp, int gold, SpriteRef sprite,
+                        String attackAnimation, String tier) {
     public static final Stats DEFAULT_STATS = new Stats(12, 0, 4, 2, 3);
 
     public EnemyType {
         id = id == null ? "" : id.strip();
         name = name == null ? "" : name.strip();
         attackAnimation = attackAnimation == null || attackAnimation.isBlank() ? null : attackAnimation.strip();
+        tier = tier == null || tier.isBlank() ? null : tier.strip();
+    }
+
+    /** An enemy with no tier. */
+    public EnemyType(String id, String name, Stats stats, int exp, int gold, SpriteRef sprite, String attackAnimation) {
+        this(id, name, stats, exp, gold, sprite, attackAnimation, null);
     }
 
     /** An enemy with the default attack animation. */
@@ -40,6 +48,6 @@ public record EnemyType(String id, String name, Stats stats, int exp, int gold, 
     }
 
     public EnemyType withSprite(SpriteRef newSprite) {
-        return new EnemyType(id, name, stats, exp, gold, newSprite, attackAnimation);
+        return new EnemyType(id, name, stats, exp, gold, newSprite, attackAnimation, tier);
     }
 }

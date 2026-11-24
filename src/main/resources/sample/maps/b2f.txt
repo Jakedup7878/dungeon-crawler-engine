@@ -1,0 +1,26 @@
+name: B2F - The Flooded Vault
+; The second floor. Stairs lead back up to B1F.
++---+---+---+---+---+---+
+|###|###|               |
++---+---+   +---+---+   +
+|       D   |###|###|   |
++---+---+   +---+---+   +
+|###|###|     ^         |
++---+---+---+---+-D-+---+
+|###|###|###|           |
++---+---+---+---+---+---+
+
+[settings]
+encounters = giant-rat, tier:elite
+encounter_rate = 8
+group = 1-2
+
+[stairs 1,1]
+name = You climb the worn steps
+to = maps/b1f.txt
+arrive = 9,9,east
+way = up
+
+[chest 5,3]
+name = Waterlogged chest
+items = thorn-mail, potion x2

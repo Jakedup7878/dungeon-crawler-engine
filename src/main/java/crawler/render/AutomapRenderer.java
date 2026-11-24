@@ -5,6 +5,8 @@ import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
 import crawler.core.Exploration;
+import crawler.core.MapObject;
+import crawler.core.ObjectType;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -59,6 +61,10 @@ public final class AutomapRenderer {
                     if (!rock) {
                         g.setColor(GRID);
                         g.drawRect(x * cell, y * cell, cell - 1, cell - 1);
+                        MapObject object = map.object(x, y);
+                        if (object != null && object.type() == ObjectType.STAIRS) {
+                            drawStairs(g, x * cell, y * cell, cell, object.destination().up());
+                        }
                     }
                 }
             }
@@ -79,6 +85,15 @@ public final class AutomapRenderer {
         } finally {
             g.dispose();
         }
+    }
+
+    /** A triangle pointing the way the stairs go. */
+    private static void drawStairs(Graphics2D g, int x, int y, int cell, boolean up) {
+        int a = y + cell / 4;
+        int b = y + cell - cell / 4;
+        g.setColor(DOOR);
+        g.fillPolygon(new int[]{x + cell / 4, x + cell - cell / 4, x + cell / 2},
+                up ? new int[]{b, b, a} : new int[]{a, a, b}, 3);
     }
 
     private static void drawEdge(Graphics2D g, EdgeType edge, int x, int y, Direction side, int cell) {

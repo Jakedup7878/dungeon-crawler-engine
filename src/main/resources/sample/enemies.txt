@@ -10,6 +10,7 @@ defense = 2
 speed = 3
 exp = 6
 gold = 3
+tier = common
 
 [enemy giant-rat]
 name = Giant Rat
@@ -20,6 +21,7 @@ defense = 1
 speed = 8
 exp = 5
 gold = 2
+tier = common
 
 [enemy rat-king]
 name = Rat King
@@ -30,3 +32,15 @@ defense = 4
 speed = 6
 exp = 40
 gold = 50
+tier = boss
+
+[enemy dire-rat]
+name = Dire Rat
+hp = 16
+mp = 0
+attack = 8
+defense = 2
+speed = 8
+exp = 9
+gold = 6
+tier = elite

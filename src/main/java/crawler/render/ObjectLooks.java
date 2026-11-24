@@ -27,6 +27,8 @@ public final class ObjectLooks {
     private static Sprite builtInNpc;
     private static Sprite builtInChest;
     private static Sprite builtInOpenChest;
+    private static Sprite builtInStairsUp;
+    private static Sprite builtInStairsDown;
     private static Sprite builtInSlash;
     private static Sprite builtInClaw;
     private static final Map<Integer, Sprite> BLOBS = new HashMap<>();
@@ -54,6 +56,7 @@ public final class ObjectLooks {
             case NPC -> 0.8;
             case CHEST -> 0.42;
             case EVENT -> 0.7;
+            case STAIRS -> 0.85;
         };
     }
 
@@ -74,6 +77,15 @@ public final class ObjectLooks {
             builtInOpenChest = DefaultSprites.chest(true);
         }
         return open ? builtInOpenChest : builtInChest;
+    }
+
+    /** The built-in stairs, up or down. */
+    public static synchronized Sprite defaultStairs(boolean up) {
+        if (builtInStairsUp == null) {
+            builtInStairsUp = DefaultSprites.stairs(true);
+            builtInStairsDown = DefaultSprites.stairs(false);
+        }
+        return up ? builtInStairsUp : builtInStairsDown;
     }
 
     /** The built-in attack animations: a slash when the party hits, a claw when enemies do. */
@@ -111,6 +123,7 @@ public final class ObjectLooks {
             case EVENT -> null;
             case CHEST -> chest(open);
             case NPC -> npc();
+            case STAIRS -> defaultStairs(object.destination().up());
         };
     }
 

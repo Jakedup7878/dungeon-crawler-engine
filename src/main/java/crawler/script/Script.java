@@ -33,7 +33,7 @@ public final class Script {
     public static final Set<String> STATS = ordered("attack", "defense", "speed");
     /** What can be read of {@code user.} and {@code target.}. */
     public static final Set<String> PROPERTIES = ordered("hp", "maxhp", "mp", "maxmp", "attack", "defense", "speed",
-            "level", "alive", "poisoned", "stunned");
+            "level", "tier", "alive", "poisoned", "stunned");
     static final Set<String> NUMBERS = ordered("damage", "round", "battle");
     /** Most statements one run may execute. */
     public static final int MAX_STEPS = 2000;

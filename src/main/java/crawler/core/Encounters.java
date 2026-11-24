@@ -6,7 +6,7 @@ import java.util.List;
 /**
  * Random battles on a map: which enemies can turn up, how often, and how many at once.
  *
- * @param enemies  ids of the enemy types that can appear (see {@link EnemyType})
+ * @param enemies  ids of the enemy types that can appear (see {@link EnemyType}), or {@code tier:elite} for a whole {@link Tier}
  * @param rate     chance of a battle on each step, in percent (0 = never)
  * @param minGroup fewest enemies in one battle
  * @param maxGroup most enemies in one battle

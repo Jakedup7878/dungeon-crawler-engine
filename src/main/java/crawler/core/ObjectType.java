@@ -7,7 +7,9 @@ public enum ObjectType {
     /** A chest the party opens by walking into it. Blocks the cell. */
     CHEST("chest", "Chest", true),
     /** A character the party talks to by walking into it. Blocks the cell. */
-    NPC("npc", "NPC", true);
+    NPC("npc", "NPC", true),
+    /** Stairs to another floor (or anywhere else): stepping onto the cell takes the party there. */
+    STAIRS("stairs", "Stairs", false);
 
     /** Name used in map files. */
     public final String key;
@@ -26,8 +28,11 @@ public enum ObjectType {
         return this == NPC ? displayName : displayName.toLowerCase();
     }
 
-    /** "an event", "a chest", "an NPC". */
+    /** "an event", "a chest", "an NPC", "a staircase". */
     public String withArticle() {
+        if (this == STAIRS) {
+            return "a staircase";
+        }
         return (this == CHEST ? "a " : "an ") + lowerName();
     }
 

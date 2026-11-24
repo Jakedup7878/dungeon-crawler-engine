@@ -61,6 +61,8 @@ final class ItemForm implements RosterDialog.Form<Item> {
                     "on hit\n  if chance(40) and target.alive\n    poison target 3 for 3\n  end"),
             new Example("Weapon: stuns", ItemKind.WEAPON, ItemTarget.SELF,
                     "on hit\n  if chance(20) and target.alive\n    stun target 1\n  end"),
+            new Example("Weapon: strong against bosses (tier 3 up)", ItemKind.WEAPON, ItemTarget.SELF,
+                    "on hit\n  if target.tier >= 3\n    damage target damage / 2\n  end"),
             new Example("Armor: thorns", ItemKind.BODY, ItemTarget.SELF,
                     "on hurt\n  say \"Thorns prick {target}!\"\n  damage target 1 + damage / 5"),
             new Example("Armor: heals its wearer each round", ItemKind.BODY, ItemTarget.SELF,
@@ -235,7 +237,7 @@ final class ItemForm implements RosterDialog.Form<Item> {
 
                 Numbers: 12, + - * / %, random(1, 6), chance(30), damage, round,
                 battle (1 in battle), and user. or target. followed by hp, maxhp,
-                mp, maxmp, attack, defense, speed, level, alive, poisoned, stunned.
+                mp, maxmp, attack, defense, speed, level, tier, alive, poisoned, stunned.
                 Compare with < <= > >= == != and join with and, or, not.
                 A line from # on is a comment.""", 34, 70);
         text.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));

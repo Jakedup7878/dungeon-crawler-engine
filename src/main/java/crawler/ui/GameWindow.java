@@ -1,6 +1,6 @@
 package crawler.ui;
 
-import crawler.core.DungeonMap;
+import crawler.core.Floors;
 import crawler.core.GameContent;
 import crawler.game.Game;
 import crawler.render.AssetSource;
@@ -17,13 +17,13 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.Random;
 
-/** A window playing one map. Used by the game itself and by the map editor's play test. */
+/** A window playing a game. Used by the game itself and by the map editor's play test. */
 public final class GameWindow {
     private GameWindow() {
     }
 
     /**
-     * Opens a window that plays {@code map} from its start position. Call on the Swing thread.
+     * Opens a window that plays a game from the first floor's start position. Call on the Swing thread.
      *
      * @param content       the project's settings, party, classes, enemies and animations
      * @param assets        where the game's own pictures and music come from
@@ -31,9 +31,9 @@ public final class GameWindow {
      * @param exitOnClose quit the program when the window closes (the game). Otherwise only the
      *                    window closes, and Esc closes it too (play-testing from the editor).
      */
-    public static JFrame open(DungeonMap map, GameContent content, AssetSource assets, String title,
+    public static JFrame open(Floors floors, GameContent content, AssetSource assets, String title,
                               boolean exitOnClose, boolean partyCreation) {
-        GamePanel panel = new GamePanel(() -> new Game(map, content, new Random()), assets, partyCreation);
+        GamePanel panel = new GamePanel(() -> new Game(floors, content, new Random()), assets, partyCreation);
         JFrame frame = new JFrame(title);
         frame.setDefaultCloseOperation(exitOnClose ? JFrame.EXIT_ON_CLOSE : JFrame.DISPOSE_ON_CLOSE);
         frame.add(panel);

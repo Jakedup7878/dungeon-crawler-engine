@@ -1,6 +1,7 @@
 package crawler;
 
 import crawler.core.DungeonMap;
+import crawler.core.Floors;
 import crawler.core.GameContent;
 import crawler.core.GamePack;
 import crawler.core.GameProject;
@@ -39,8 +40,12 @@ public final class Main {
     private Main() {
     }
 
-    /** What to play: a map, the rest of the game, where its files come from, and the window title. */
-    public record Loaded(DungeonMap map, GameContent content, AssetSource assets, String title) {
+    /** What to play: its floors, the rest of the game, where its files come from, and the window title. */
+    public record Loaded(Floors floors, GameContent content, AssetSource assets, String title) {
+        /** The floor it starts on. */
+        public DungeonMap map() {
+            return floors.first();
+        }
     }
 
     public static void main(String[] args) {
@@ -54,7 +59,7 @@ public final class Main {
             System.exit(1);
             return;
         }
-        SwingUtilities.invokeLater(() -> GameWindow.open(game.map(), game.content(), game.assets(), game.title(), true, true));
+        SwingUtilities.invokeLater(() -> GameWindow.open(game.floors(), game.content(), game.assets(), game.title(), true, true));
     }
 
     /**
@@ -66,7 +71,7 @@ public final class Main {
         if (target == null) {
             return loadProject(ProjectFiles.classpath(SAMPLE), Path.of("Sample Quest"));
         }
-        target = target.toAbsolutePath();
+        target = target.toAbsolutePath().normalize();
         if (Files.isDirectory(target)) {
             if (!GameProject.isProject(target)) {
                 throw new IOException(target + " isn't a game project: it has no " + GameProject.FILE_NAME + ".");
@@ -79,7 +84,10 @@ public final class Main {
         DungeonMap map = MapLoader.load(target);
         Path root = GameProject.findRoot(target);
         GameContent content = root == null ? GameContent.EMPTY : GameContent.load(GameProject.open(root));
-        return new Loaded(map, content, AssetSource.directory(root != null ? root : target.getParent()),
+        Path folder = root != null ? root : target.getParent();
+        Floors floors = Floors.load(ProjectFiles.folder(folder), folder.toAbsolutePath().relativize(target)
+                .toString().replace('\\', '/'), map);
+        return new Loaded(floors, content, AssetSource.directory(folder),
                 "Dungeon Crawler - " + map.name());
     }
 
@@ -98,7 +106,7 @@ public final class Main {
         String start = project.startMap();
         DungeonMap map = MapLoader.parse(start.substring(start.lastIndexOf('/') + 1), lines);
         GameContent content = GameContent.load(project.settings(), files);
-        return new Loaded(map, content, AssetSource.of(files), project.name() + " - " + map.name());
+        return new Loaded(Floors.load(files, start, map), content, AssetSource.of(files), project.name() + " - " + map.name());
     }
 
     /** The game shipped with a published program (its pack, or a plain project folder), or null. */

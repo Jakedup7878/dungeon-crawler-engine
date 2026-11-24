@@ -14,7 +14,8 @@ import java.util.function.Function;
 /**
  * Game-wide data kept in the project folder next to project.txt: the ready-made party
  * ({@code party.txt}), the classes ({@code classes.txt}), the kinds of enemy
- * ({@code enemies.txt}), the attack animations ({@code animations.txt}) and the items ({@code items.txt}).
+ * ({@code enemies.txt}), the attack animations ({@code animations.txt}) the items
+ * ({@code items.txt}) and the enemy tiers ({@code tiers.txt}).
  * A missing file just means there are none yet.
  */
 public final class GameData {
@@ -22,6 +23,7 @@ public final class GameData {
     public static final String CLASSES_FILE = "classes.txt";
     public static final String ENEMIES_FILE = "enemies.txt";
     public static final String ANIMATIONS_FILE = "animations.txt";
+    public static final String TIERS_FILE = "tiers.txt";
     public static final String ITEMS_FILE = "items.txt";
     public static final int MAX_PARTY = ProjectSettings.MAX_PARTY;
     private static final int MAX_REWARD = 999_999;
@@ -113,11 +115,11 @@ public final class GameData {
         Set<String> ids = new HashSet<>();
         for (SectionFile.Section s : sections(files, ENEMIES_FILE)) {
             s.expect("enemy", true);
-            s.allow("name", "hp", "mp", "attack", "defense", "speed", "exp", "gold", "sprite", "animation");
+            s.allow("name", "hp", "mp", "attack", "defense", "speed", "exp", "gold", "sprite", "animation", "tier");
             checkId(s, ids, "enemies");
             enemies.add(new EnemyType(s.id(), s.text("name"), Stats.read(s, EnemyType.DEFAULT_STATS),
                     s.number("exp", 0, 0, MAX_REWARD), s.number("gold", 0, 0, MAX_REWARD),
-                    SpriteRef.parse(s.image("sprite")), s.text("animation")));
+                    SpriteRef.parse(s.image("sprite")), s.text("animation"), s.text("tier")));
         }
         return enemies;
     }
@@ -129,7 +131,8 @@ public final class GameData {
             out.section("enemy", enemy.id()).field("name", enemy.name());
             enemy.stats().write(out);
             out.field("exp", enemy.exp()).field("gold", enemy.gold())
-                    .field("sprite", enemy.sprite()).field("animation", enemy.attackAnimation());
+                    .field("sprite", enemy.sprite()).field("animation", enemy.attackAnimation())
+                    .field("tier", enemy.tier());
         }
         out.save(projectRoot.resolve(ENEMIES_FILE));
     }
@@ -229,6 +232,51 @@ public final class GameData {
                     .field("animation", item.animation()).field("script", item.scriptText());
         }
         out.save(projectRoot.resolve(ITEMS_FILE));
+    }
+
+    // ------------------------------------------------------------ enemy tiers
+
+    public static List<Tier> loadTiers(Path projectRoot) throws IOException {
+        return loadTiers(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<Tier> loadTiers(ProjectFiles files) throws IOException {
+        List<Tier> tiers = new ArrayList<>();
+        Set<String> ids = new HashSet<>();
+        for (SectionFile.Section s : sections(files, TIERS_FILE)) {
+            s.expect("tier", true);
+            s.allow("name", "color", "weight", "hp", "attack", "defense", "speed", "exp", "gold", "flee");
+            checkId(s, ids, "tiers");
+            String color = s.text("color").strip();
+            if (!color.isEmpty() && !color.matches("#?[0-9a-fA-F]{6}")) {
+                throw s.error("color", "color should be six hex digits, like ff7850");
+            }
+            boolean flee = switch (s.text("flee").strip().toLowerCase(Locale.ROOT)) {
+                case "", "yes", "true" -> true;
+                case "no", "false" -> false;
+                default -> throw s.error("flee", "flee should be yes or no");
+            };
+            Tier d = Tier.create(s.id(), s.text("name"));
+            int max = Tier.MAX_PERCENT;
+            tiers.add(new Tier(s.id(), s.text("name"), color.isEmpty() ? d.color() : Integer.parseInt(color.replace("#", ""), 16),
+                    s.number("weight", d.weight(), 1, Tier.MAX_WEIGHT), s.number("hp", 100, 1, max),
+                    s.number("attack", 100, 0, max), s.number("defense", 100, 0, max), s.number("speed", 100, 0, max),
+                    s.number("exp", 100, 0, max), s.number("gold", 100, 0, max), flee));
+        }
+        return tiers;
+    }
+
+    public static void saveTiers(Path projectRoot, List<Tier> tiers) throws IOException {
+        SectionFile.Writer out = new SectionFile.Writer()
+                .comment("The tiers enemies can be tagged with, lowest first. hp to gold are percentages of each enemy's\n"
+                        + "own numbers; weight is how likely its enemies are in random battles.");
+        for (Tier t : tiers) {
+            out.section("tier", t.id()).field("name", t.name()).field("color", String.format("%06x", t.color()))
+                    .field("weight", t.weight()).field("hp", t.hp()).field("attack", t.attack())
+                    .field("defense", t.defense()).field("speed", t.speed()).field("exp", t.exp())
+                    .field("gold", t.gold()).field("flee", t.canFlee() ? "yes" : "no");
+        }
+        out.save(projectRoot.resolve(TIERS_FILE));
     }
 
     // ------------------------------------------------------------ helpers

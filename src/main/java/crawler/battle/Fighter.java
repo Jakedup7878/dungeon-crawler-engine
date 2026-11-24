@@ -7,6 +7,7 @@ import crawler.core.ItemKind;
 import crawler.core.PartyMember;
 import crawler.core.SpriteRef;
 import crawler.core.Stats;
+import crawler.core.Tier;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -37,6 +38,8 @@ public final class Fighter {
     private int mp;
     private boolean defending;
     private CharacterClass heroClass;
+    private Tier tier;
+    private int tierRank;
     private final Map<ItemKind, Item> equipment = new EnumMap<>(ItemKind.class);
     private int poisonDamage;
     private int poisonRounds;
@@ -94,6 +97,29 @@ public final class Fighter {
     public static Fighter enemy(EnemyType type, String name) {
         return new Fighter(name, true, "", type.attackAnimation(), type.sprite(), null, Stats.ZERO,
                 type.id(), type.exp(), type.gold(), 1, type.stats());
+    }
+
+    /**
+     * An enemy with its tier's changes made.
+     *
+     * @param tier its tier, or null
+     * @param rank the tier's place in the list, from 1 (0 for no tier)
+     */
+    public static Fighter enemy(EnemyType type, String name, Tier tier, int rank) {
+        Fighter fighter = enemy(tier == null ? type : tier.apply(type), name);
+        fighter.tier = tier;
+        fighter.tierRank = rank;
+        return fighter;
+    }
+
+    /** An enemy's tier, or null. */
+    public Tier tier() {
+        return tier;
+    }
+
+    /** How high an enemy's tier is, from 1; 0 for none. */
+    public int tierRank() {
+        return tierRank;
     }
 
     public String name() {

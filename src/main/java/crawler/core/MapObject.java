@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * An event, chest or NPC standing in cell (x, y). Immutable: edits make a new object.
+ * An event, chest, NPC or staircase standing in cell (x, y). Immutable: edits make a new object.
  *
  * <p>Pictures are {@link SpriteRef}s (an image, optionally an animation strip) relative to
  * the project folder. Null means the built-in look (for events: invisible).
@@ -17,10 +17,11 @@ import java.util.Objects;
  * @param battle     events only: ids of enemies the party has to fight when it steps there (a fixed
  *                   battle, such as a boss); empty for none
  * @param items      chests only: what the party gets on opening it
+ * @param destination stairs only: where they lead
  */
 public record MapObject(ObjectType type, int x, int y, String name, String text,
                         SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle,
-                        List<ItemStack> items) {
+                        List<ItemStack> items, Destination destination) {
 
     public MapObject {
         Objects.requireNonNull(type, "type");
@@ -28,6 +29,7 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
         text = text == null ? "" : text.replace("\r", "").strip();
         openSprite = type == ObjectType.CHEST ? openSprite : null;
         once = type != ObjectType.EVENT || once;
+        destination = type == ObjectType.STAIRS && destination != null ? destination : Destination.NONE;
         items = type == ObjectType.CHEST && items != null ? List.copyOf(items) : List.of();
         battle = type == ObjectType.EVENT && battle != null ? List.copyOf(battle) : List.of();
     }
@@ -36,6 +38,12 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     public MapObject(ObjectType type, int x, int y, String name, String text,
                      SpriteRef sprite, SpriteRef openSprite, boolean once) {
         this(type, x, y, name, text, sprite, openSprite, once, List.of());
+    }
+
+    /** Anything but stairs. */
+    public MapObject(ObjectType type, int x, int y, String name, String text, SpriteRef sprite, SpriteRef openSprite,
+                     boolean once, List<String> battle, List<ItemStack> items) {
+        this(type, x, y, name, text, sprite, openSprite, once, battle, items, Destination.NONE);
     }
 
     /** An object without items. */
@@ -47,7 +55,7 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     /** A new object with the default name and nothing else filled in. */
     public static MapObject create(ObjectType type, int x, int y) {
         String name = switch (type) {
-            case EVENT -> "";
+            case EVENT, STAIRS -> "";
             case CHEST -> "Chest";
             case NPC -> "Stranger";
         };
@@ -64,10 +72,10 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     }
 
     public MapObject at(int newX, int newY) {
-        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle, items);
+        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle, items, destination);
     }
 
     public MapObject withSprites(SpriteRef newSprite, SpriteRef newOpenSprite) {
-        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle, items);
+        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle, items, destination);
     }
 }

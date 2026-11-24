@@ -42,7 +42,7 @@ Put each command, `else` and `end` on its own line. Everything after `#` is a co
 
 Whole numbers, `+ - * / %`, parentheses, and:
 
-- `user.` or `target.` and `hp`, `maxhp`, `mp`, `maxmp`, `attack`, `defense`, `speed`, `level`, `alive`, `poisoned`, `stunned`
+- `user.` or `target.` and `hp`, `maxhp`, `mp`, `maxmp`, `attack`, `defense`, `speed`, `level`, `tier` (an enemy's, 1 for the lowest, 0 for none), `alive`, `poisoned`, `stunned`
 - `damage` (of the hit that set off `on hit` or `on hurt`), `round`, `battle` (1 in battle, 0 outside)
 - `random(1, 6)`, and `chance(30)`, which is true 30% of the time
 

@@ -115,6 +115,32 @@ final class DefaultSprites {
         return image;
     }
 
+    /** Stone steps in a doorway: lit and rising for up, sinking into the dark for down. */
+    static Sprite stairs(boolean up) {
+        int size = 64;
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setColor(new Color(74, 78, 92));
+        g.fillRect(4, 4, 56, 60);
+        g.setColor(new Color(12, 12, 18));
+        g.fillRect(9, 9, 46, 55);
+        int steps = 6;
+        for (int i = 0; i < steps; i++) {
+            // Going up, the far steps are high; going down, they sink away below the edge of the floor.
+            int inset = up ? i * 3 : (steps - 1 - i) * 3;
+            int top = up ? 56 - i * 8 : 24 + i * 7;
+            double light = up ? 0.6 + i * 0.08 : 0.2 + i * 0.12;
+            g.setColor(new Color((int) (150 * light), (int) (154 * light), (int) (172 * light)));
+            g.fillRect(9 + inset, top, 46 - inset * 2, 3);
+            g.setColor(new Color((int) (92 * light), (int) (96 * light), (int) (112 * light)));
+            g.fillRect(9 + inset, top + 3, 46 - inset * 2, up ? 5 : 4);
+        }
+        g.setColor(new Color(255, 214, 92));
+        g.fillPolygon(new int[]{26, 38, 32}, up ? new int[]{8, 8, 1} : new int[]{1, 1, 8}, 3);
+        g.dispose();
+        return Sprite.of(image);
+    }
+
     /** A wooden chest with iron bands, closed (with a lock) or open (with gold inside). */
     static Sprite chest(boolean open) {
         int width = 64;

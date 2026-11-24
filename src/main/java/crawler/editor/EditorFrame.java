@@ -6,6 +6,7 @@ import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
 import crawler.core.EnemyType;
+import crawler.core.Floors;
 import crawler.core.GameContent;
 import crawler.core.GameData;
 import crawler.core.GameProject;
@@ -14,9 +15,11 @@ import crawler.core.MapLoader;
 import crawler.core.MapObject;
 import crawler.core.MapWriter;
 import crawler.core.PartyMember;
+import crawler.core.ProjectFiles;
 import crawler.core.ProjectSettings;
 import crawler.core.SpriteRef;
 import crawler.core.Surface;
+import crawler.core.Tier;
 import crawler.render.ObjectLooks;
 import crawler.ui.GameWindow;
 
@@ -235,6 +238,7 @@ final class EditorFrame extends JFrame {
         projectMenu.add(projectAction("Party Members...", this::editParty));
         projectMenu.add(projectAction("Classes...", this::editClasses));
         projectMenu.add(projectAction("Enemies...", this::editEnemies));
+        projectMenu.add(projectAction("Enemy Tiers...", this::editTiers));
         projectMenu.add(projectAction("Items...", this::editItems));
         projectMenu.add(projectAction("Attack Animations...", this::editAnimations));
         projectMenu.addSeparator();
@@ -692,7 +696,7 @@ final class EditorFrame extends JFrame {
             List<EnemyType> edited = RosterDialog.show(this, "Enemies - " + project.name(),
                     "Every kind of enemy in the game. Encounters will refer to them by id. "
                             + "Saved in enemies.txt when you press OK.",
-                    enemies, new EnemyForm(assets, animations()), Integer.MAX_VALUE);
+                    enemies, new EnemyForm(assets, animations(), tiers()), Integer.MAX_VALUE);
             if (edited == null) {
                 return;
             }
@@ -704,6 +708,32 @@ final class EditorFrame extends JFrame {
             status("Saved " + edited.size() + " kinds of enemy in " + GameData.ENEMIES_FILE + ".");
         } catch (IOException | IllegalArgumentException e) {
             JOptionPane.showMessageDialog(this, "Could not edit the enemies:\n" + e.getMessage(),
+                    APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editTiers() {
+        try {
+            List<Tier> saved = GameData.loadTiers(project.root());
+            Map<String, String> inUse = new java.util.HashMap<>();
+            for (EnemyType enemy : GameData.loadEnemies(project.root())) {
+                if (enemy.tier() != null) {
+                    inUse.put(enemy.tier(), enemy.name());
+                }
+            }
+            List<Tier> edited = RosterDialog.show(this, "Enemy Tiers - " + project.name(),
+                    "Tags that set enemies apart, lowest first. Give enemies theirs in Project > Enemies; random battles and "
+                            + "events can use a whole tier (tier:elite). With none, the game uses Common, Elite and Boss. "
+                            + "Saved in tiers.txt when you press OK.",
+                    saved.isEmpty() ? Tier.builtIn() : saved, new TierForm(inUse), Integer.MAX_VALUE);
+            if (edited == null) {
+                return;
+            }
+            GameData.saveTiers(project.root(), edited);
+            applyProject();
+            status("Saved " + edited.size() + " enemy tiers in " + GameData.TIERS_FILE + ".");
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Could not edit the tiers:\n" + e.getMessage(),
                     APP, JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -797,7 +827,8 @@ final class EditorFrame extends JFrame {
 
     private void editMapSettings() {
         List<EnemyType> enemies = project == null ? List.of() : enemiesOrEmpty();
-        SettingsDialogs.MapSettings chosen = SettingsDialogs.mapSettings(this, doc.map(), assets, enemies);
+        SettingsDialogs.MapSettings chosen = SettingsDialogs.mapSettings(this, doc.map(), assets, enemies,
+                project == null ? List.of() : tiers());
         if (chosen == null) {
             return;
         }
@@ -843,9 +874,44 @@ final class EditorFrame extends JFrame {
     private void applyProject() {
         looks.setDefaults(project == null ? ProjectSettings.DEFAULT : project.settings());
         doc.setKnownEnemies(project == null ? null
-                : enemiesOrEmpty().stream().map(EnemyType::id).collect(Collectors.toSet()));
+                : enemiesOrEmpty().stream().flatMap(e -> e.tier() == null ? Stream.of(e.id())
+                        : Stream.of(e.id(), Tier.PREFIX + e.tier())).collect(Collectors.toSet()));
+        doc.setFloors(project == null ? null : floors());
         doc.setKnownItems(project == null ? null : Set.copyOf(itemIds()));
         side.assetsChanged();
+    }
+
+    /** The project's tiers, or the built-in ones. */
+    private List<Tier> tiers() {
+        try {
+            List<Tier> tiers = GameData.loadTiers(project.root());
+            return tiers.isEmpty() ? Tier.builtIn() : tiers;
+        } catch (IOException | IllegalArgumentException e) {
+            status("Couldn't read " + GameData.TIERS_FILE + ": " + e.getMessage());
+            return Tier.builtIn();
+        }
+    }
+
+    /** Every map in the project's maps folder, as last saved; null for any that can't be read. */
+    private Map<String, DungeonMap> floors() {
+        Map<String, DungeonMap> floors = new java.util.HashMap<>();
+        if (project == null || !Files.isDirectory(project.mapsFolder())) {
+            return floors;
+        }
+        try (Stream<Path> files = Files.walk(project.mapsFolder())) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".txt")).toList()) {
+                DungeonMap map = null;
+                try {
+                    map = MapLoader.load(file);
+                } catch (IOException | IllegalArgumentException e) {
+                    // It still counts as a floor; what's wrong shows when it's opened.
+                }
+                floors.put(project.relative(file), map);
+            }
+        } catch (IOException e) {
+            status("Couldn't look in " + project.mapsFolder() + ": " + e.getMessage());
+        }
+        return floors;
     }
 
     private List<EnemyType> enemiesOrEmpty() {
@@ -963,7 +1029,7 @@ final class EditorFrame extends JFrame {
         MapObject existing = map.object(x, y);
         MapObject edited;
         if (existing != null) {
-            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds(), itemIds());
+            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds(), itemIds(), floors());
         } else {
             Tool tool = canvas.tool();
             if (!tool.placesObjects()) {
@@ -974,7 +1040,7 @@ final class EditorFrame extends JFrame {
                 status(problem);
                 return;
             }
-            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds(), itemIds());
+            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds(), itemIds(), floors());
         }
         if (edited == null || edited.equals(existing)) {
             return;
@@ -1016,15 +1082,18 @@ final class EditorFrame extends JFrame {
             return;
         }
         GameContent content;
+        Floors floors;
         try {
             content = content();
+            floors = project == null ? Floors.single(copy) : Floors.load(ProjectFiles.folder(project.root()),
+                    doc.file() != null && project.contains(doc.file()) ? project.relative(doc.file()) : "", copy);
         } catch (IOException | IllegalArgumentException e) {
             JOptionPane.showMessageDialog(this, "The project's files have a problem, so the play test can't start:\n"
                     + e.getMessage(), "Play test", JOptionPane.WARNING_MESSAGE);
             return;
         }
         // From the start, the play test offers party creation (if the project does); from the preview it doesn't.
-        GameWindow.open(copy, content, assets, "Play test - " + copy.name() + "   (Esc to close)", false, !fromPreview);
+        GameWindow.open(floors, content, assets, "Play test - " + copy.name() + "   (Esc to close)", false, !fromPreview);
         status("Play test running in its own window. It uses the map as it was when you pressed Play.");
     }
 }

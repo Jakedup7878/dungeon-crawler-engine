@@ -24,15 +24,19 @@ enum Tool {
     EVENT("Event", KeyEvent.VK_6, KeyEvent.VK_V, ObjectType.EVENT,
             "Click a floor cell: add an event, a message that appears when the party steps there. "
                     + "Click an event to edit it, or drag it to move it.",
-            "Right-click: remove an event, chest or NPC."),
+            "Right-click: remove an event, chest, NPC or stairs."),
     CHEST("Chest", KeyEvent.VK_7, KeyEvent.VK_T, ObjectType.CHEST,
             "Click a floor cell: add a chest. The party opens it by walking into it. "
                     + "Click a chest to edit it, or drag it to move it.",
-            "Right-click: remove an event, chest or NPC."),
+            "Right-click: remove an event, chest, NPC or stairs."),
     NPC("NPC", KeyEvent.VK_8, KeyEvent.VK_N, ObjectType.NPC,
             "Click a floor cell: add a character. The party talks to it by walking into it. "
                     + "Click one to edit it, or drag it to move it.",
-            "Right-click: remove an event, chest or NPC.");
+            "Right-click: remove an event, chest, NPC or stairs."),
+    STAIRS("Stairs", KeyEvent.VK_9, KeyEvent.VK_U, ObjectType.STAIRS,
+            "Click a floor cell: add stairs to another floor. Stepping on them takes the party there. "
+                    + "Click them to edit, or drag them to move them.",
+            "Right-click: remove an event, chest, NPC or stairs.");
 
     final String label;
     /** Number key that selects the tool. */
