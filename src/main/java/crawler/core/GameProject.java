@@ -1,10 +1,18 @@
 package crawler.core;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * A game made with the editor: one folder that holds everything the game needs.
@@ -29,6 +37,8 @@ public final class GameProject {
     /** The first map, relative to the root, with forward slashes. */
     private String startMap;
     private ProjectSettings settings;
+    /** The floors in order, as far as that's been decided; see {@link #floors()}. */
+    private List<String> floorOrder = List.of();
 
     private GameProject(Path root, String name, String startMap, ProjectSettings settings) {
         this.root = root.toAbsolutePath().normalize();
@@ -84,6 +94,7 @@ public final class GameProject {
         boolean partyCreation = d.partyCreation();
         int partySize = d.partySize();
         int startingGold = d.startingGold();
+        List<String> floorOrder = List.of();
         List<ItemStack> startingItems = d.startingItems();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).strip();
@@ -108,6 +119,7 @@ public final class GameProject {
                 case "party_creation" -> partyCreation = yesNo(value, where + "party_creation should be yes or no");
                 case "party_size" -> partySize = number(value, 1, ProjectSettings.MAX_PARTY, where + "party_size");
                 case "starting_gold" -> startingGold = number(value, 0, ProjectSettings.MAX_GOLD, where + "starting_gold");
+                case "floors" -> floorOrder = Encounters.parseIds(value);
                 case "starting_items" -> {
                     try {
                         startingItems = ItemStack.parse(value);
@@ -121,8 +133,10 @@ public final class GameProject {
         if (start == null) {
             throw new IOException(FILE_NAME + " doesn't say which map to start on (start = maps/b1f.txt)");
         }
-        return new GameProject(root, name, start, new ProjectSettings(npc, chest, chestOpen,
+        GameProject project = new GameProject(root, name, start, new ProjectSettings(npc, chest, chestOpen,
                 battleMusic, victoryMusic, partyCreation, partySize, startingGold, startingItems));
+        project.floorOrder = floorOrder;
+        return project;
     }
 
     private static boolean yesNo(String value, String error) throws IOException {
@@ -159,6 +173,7 @@ public final class GameProject {
         StringBuilder text = new StringBuilder("; A Dungeon Crawler game. Paths are relative to this folder.\n")
                 .append("name = ").append(name.replaceAll("[\\r\\n]+", " ")).append('\n')
                 .append("start = ").append(startMap).append('\n');
+        setting(text, "floors", floorOrder.isEmpty() ? null : String.join(", ", floorOrder));
         ProjectSettings s = settings;
         setting(text, "npc_sprite", s.npcSprite());
         setting(text, "chest_sprite", s.chestSprite());
@@ -196,6 +211,49 @@ public final class GameProject {
 
     public void setName(String name) {
         this.name = name.strip();
+    }
+
+    /**
+     * Every map file in the maps folder, in the project's order; ones it doesn't mention come
+     * last, by name (so b2f comes before b10f).
+     */
+    public List<String> floors() {
+        List<String> found = new ArrayList<>();
+        if (Files.isDirectory(mapsFolder())) {
+            try (Stream<Path> files = Files.walk(mapsFolder())) {
+                files.filter(f -> Files.isRegularFile(f) && f.toString().endsWith(".txt")).map(this::relative).forEach(found::add);
+            } catch (IOException | UncheckedIOException e) {
+                // Whatever was found will do.
+            }
+        }
+        found.sort(Comparator.comparing(GameProject::sortKey));
+        List<String> floors = new ArrayList<>(new LinkedHashSet<>(floorOrder));
+        floors.retainAll(found);
+        found.removeAll(floors);
+        floors.addAll(found);
+        return floors;
+    }
+
+    /** Numbers padded, so they sort by size. */
+    private static String sortKey(String file) {
+        StringBuilder key = new StringBuilder();
+        Matcher m = Pattern.compile("\\d+").matcher(file.toLowerCase(Locale.ROOT));
+        while (m.find()) {
+            m.appendReplacement(key, "0".repeat(Math.max(0, 8 - m.group().length())) + m.group());
+        }
+        return m.appendTail(key).toString();
+    }
+
+    public void setFloors(List<String> order) {
+        floorOrder = List.copyOf(order);
+    }
+
+    /** The floor some places after another (-1 for the one before), or null if there is none. */
+    public String floorBeside(String floor, int places) {
+        List<String> floors = floors();
+        int at = floors.indexOf(floor);
+        int wanted = at + places;
+        return at < 0 || wanted < 0 || wanted >= floors.size() ? null : floors.get(wanted);
     }
 
     public Path mapsFolder() {

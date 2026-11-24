@@ -4,7 +4,10 @@ import crawler.core.CellType;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
+import crawler.core.MapObject;
 import crawler.core.ObjectType;
+
+import java.util.List;
 
 /**
  * The editing operations, as plain functions on a {@link DungeonMap}. They contain no
@@ -24,6 +27,16 @@ final class MapEdits {
         dig(map, x, y);
         map.setStart(x, y, Direction.NORTH);
         map.sealEdges();
+        return map;
+    }
+
+    /** A new floor with the same rooms, walls, doors and textures as another, but nothing placed on it. */
+    static DungeonMap sameLayout(DungeonMap from, String name) {
+        DungeonMap map = from.copy();
+        map.setName(name);
+        for (MapObject object : List.copyOf(map.objects())) {
+            map.removeObject(object.x(), object.y());
+        }
         return map;
     }
 

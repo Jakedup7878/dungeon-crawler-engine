@@ -55,6 +55,7 @@ final class SidePanel extends JComponent {
     /** The texture references the renderer's textures were made from; null forces a rebuild. */
     private Map<Surface, String> texturesMadeFrom;
     private Tool tool = Tool.ROOM;
+    private String floorInfo = "";
     private int previewX;
     private int previewY;
     private Direction previewFacing = Direction.NORTH;
@@ -88,6 +89,12 @@ final class SidePanel extends JComponent {
 
     void setTool(Tool tool) {
         this.tool = tool;
+        repaint();
+    }
+
+    /** A line about where this map is among the project's floors, and the guide; "" for none. */
+    void setFloorInfo(String info) {
+        floorInfo = info;
         repaint();
     }
 
@@ -139,6 +146,9 @@ final class SidePanel extends JComponent {
 
             y = header(g, "MAP", x, y);
             y = line(g, fit(g, map.name(), textWidth), BOLD_FONT, HIGHLIGHT, x, y);
+            if (!floorInfo.isEmpty()) {
+                y = line(g, fit(g, floorInfo, textWidth), TEXT_FONT, TEXT, x, y);
+            }
             y = line(g, map.width() + " x " + map.height() + " cells, " + check.doors()
                     + (check.doors() == 1 ? " door" : " doors"), TEXT_FONT, TEXT, x, y);
             y = line(g, check.floorCells() + " floor cells, " + check.reachableCells() + " reachable",

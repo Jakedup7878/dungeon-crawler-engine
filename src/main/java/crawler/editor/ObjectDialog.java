@@ -105,8 +105,8 @@ final class ObjectDialog {
                     new JLabel(), hint("Shown in the log when the party takes them. May be empty."),
                     new JLabel("Leads to"), floor,
                     new JLabel(), hint(floors.isEmpty() ? "The other floor's file, such as maps/b2f.txt. Save this map in a "
-                            + "project to choose from a list." : "The floor's file. To make a new floor: File > New, "
-                            + "then save it in the project's maps folder. The same floor works too, as a teleporter."),
+                            + "project to choose from a list." : "The floor's file. To make a new floor: Project > Add "
+                            + "Floor. The same floor works too, as a teleporter."),
                     new JLabel("Arrive at"), arrive,
                     new JLabel(), hint("'start' (that floor's start), or a cell and a direction to face, like 3,4,north. "
                             + "The list offers that floor's stairs."),

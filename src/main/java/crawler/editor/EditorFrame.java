@@ -89,6 +89,9 @@ final class EditorFrame extends JFrame {
     private final List<Action> projectActions = new ArrayList<>();
     /** The project the open map belongs to, or null for a map on its own. */
     private GameProject project;
+    /** Which floor shows as a guide: -1 the previous, 1 the next, 0 none. */
+    private int guidePlaces;
+    private final Map<Integer, JRadioButtonMenuItem> guideItems = new java.util.HashMap<>();
     private int previewX;
     private int previewY;
     private Direction previewFacing = Direction.NORTH;
@@ -136,6 +139,7 @@ final class EditorFrame extends JFrame {
         doc.addListener(this::documentChanged);
 
         resetPreview();
+        refreshGuide();
         selectTool(Tool.ROOM);
         documentChanged();
         updatePosition(-1, -1, null);
@@ -223,6 +227,19 @@ final class EditorFrame extends JFrame {
         JCheckBoxMenuItem unreachable = new JCheckBoxMenuItem("Show Unreachable Cells in Red", true);
         unreachable.addActionListener(e -> canvas.setShowUnreachable(unreachable.isSelected()));
         view.add(unreachable);
+        JMenu guide = new JMenu("Floor Guide");
+        ButtonGroup guides = new ButtonGroup();
+        for (int places : new int[]{0, -1, 1}) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(places == 0 ? "Off" : places < 0 ? "Previous Floor" : "Next Floor");
+            item.setSelected(places == 0);
+            item.addActionListener(e -> setGuide(places));
+            guides.add(item);
+            guide.add(item);
+            guideItems.put(places, item);
+        }
+        view.add(guide);
+        view.add(action("Toggle Previous Floor Guide", KeyStroke.getKeyStroke(KeyEvent.VK_G, MENU_KEY),
+                () -> setGuide(guidePlaces == -1 ? 0 : -1)));
         view.addSeparator();
         view.add(action("Turn Preview Left", KeyStroke.getKeyStroke(KeyEvent.VK_Q, 0),
                 () -> setPreview(previewX, previewY, previewFacing.turnLeft())));
@@ -232,6 +249,15 @@ final class EditorFrame extends JFrame {
 
         JMenu projectMenu = menu("Project", KeyEvent.VK_P);
         projectMenu.add(projectAction("Settings...", this::editProjectSettings));
+        projectMenu.add(projectAction("Floors...", this::showFloors));
+        projectMenu.add(projectAction("Add Floor...", this::addFloor));
+        Action previous = projectAction("Open Previous Floor", () -> openFloorBeside(-1));
+        previous.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_UP, MENU_KEY));
+        projectMenu.add(previous);
+        Action next = projectAction("Open Next Floor", () -> openFloorBeside(1));
+        next.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, MENU_KEY));
+        projectMenu.add(next);
+        projectMenu.addSeparator();
         projectMenu.add(projectAction("Make This the Starting Map", this::makeStartMap));
         projectMenu.add(projectAction("Show Project Folder", this::showProjectFolder));
         projectMenu.addSeparator();
@@ -476,6 +502,7 @@ final class EditorFrame extends JFrame {
     }
 
     private void afterLoad(String message) {
+        refreshGuide();
         resetPreview();
         SwingUtilities.invokeLater(canvas::zoomToFit);
         status(message);
@@ -533,6 +560,7 @@ final class EditorFrame extends JFrame {
         project = projectOf(file); // saving into a project folder makes the map part of that project
         applyProject();
         doc.markSaved(file.toAbsolutePath());
+        refreshGuide();
         status("Saved " + file.toAbsolutePath() + "."
                 + (check.problems().isEmpty() ? "" : "  Note: " + check.problems().get(0)));
         return true;
@@ -650,6 +678,105 @@ final class EditorFrame extends JFrame {
             JOptionPane.showMessageDialog(this, "Could not open the project:\n" + e.getMessage(),
                     APP, JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // ------------------------------------------------------------ floors
+
+    /** The open map's file inside the project, or null if it isn't saved there. */
+    private String currentFloor() {
+        return project != null && doc.file() != null && project.contains(doc.file()) ? project.relative(doc.file()) : null;
+    }
+
+    private void showFloors() {
+        FloorsDialog.Choice choice = FloorsDialog.show(this, project, floors(), currentFloor());
+        refreshGuide();
+        if (choice != null && choice.add()) {
+            addFloor();
+        } else if (choice != null && !choice.open().equals(currentFloor())) {
+            openFloor(choice.open());
+        }
+    }
+
+    private void openFloor(String floor) {
+        if (confirmDiscard()) {
+            openFile(project.root().resolve(floor));
+        }
+    }
+
+    private void openFloorBeside(int places) {
+        String floor = currentFloor() == null ? null : project.floorBeside(currentFloor(), places);
+        if (floor == null) {
+            status(places < 0 ? "This is the first floor." : "This is the last floor. Project > Add Floor makes another.");
+        } else {
+            openFloor(floor);
+        }
+    }
+
+    private void addFloor() {
+        if (!confirmDiscard() || project == null) { // saving can move a map out of the project
+            return;
+        }
+        List<String> floors = new ArrayList<>(project.floors());
+        int at = floors.indexOf(currentFloor());
+        MapDialogs.NewFloor spec = MapDialogs.askNewFloor(this, "B" + (floors.size() + 1) + "F", doc.map(), at >= 0);
+        if (spec == null) {
+            return;
+        }
+        try {
+            // Layouts come from the saved floor, as unsaved changes to it have just been given up.
+            DungeonMap map = spec.copyLayout()
+                    ? MapEdits.sameLayout(at >= 0 ? MapLoader.load(doc.file()) : doc.map(), spec.name())
+                    : MapEdits.blank(spec.name(), spec.width(), spec.height());
+            Files.createDirectories(project.mapsFolder());
+            Path file = FloorsDialog.freeFile(project.mapsFolder(), suggestedFileName(spec.name()));
+            MapWriter.save(map, file);
+            floors.add(at < 0 ? floors.size() : spec.after() ? at + 1 : at, project.relative(file));
+            project.setFloors(floors);
+            project.save();
+            if (openFile(file)) {
+                status("Added " + spec.name() + " as floor " + (project.floors().indexOf(currentFloor()) + 1) + " of "
+                        + floors.size() + ". Ctrl+G shows the previous floor as a guide.");
+            }
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Could not add the floor:\n" + e.getMessage(), APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void setGuide(int places) {
+        guidePlaces = places;
+        guideItems.get(places).setSelected(true);
+        String shown = refreshGuide();
+        status(places == 0 ? "Floor guide off." : shown != null ? "Guide: " + shown + ", in pink. Triangles are its stairs; rings are "
+                + "where they come out here." : "There is no " + (places < 0 ? "previous" : "next") + " floor to show"
+                + (project == null ? ": this map isn't in a project." : "."));
+    }
+
+    /** Reads the guide floor again; returns its name, or null if there is none to show. */
+    private String refreshGuide() {
+        String current = currentFloor();
+        String floor = null;
+        String info = "";
+        if (project != null) {
+            List<String> floors = project.floors();
+            if (current != null) {
+                info = "Floor " + (floors.indexOf(current) + 1) + " of " + floors.size();
+                floor = guidePlaces == 0 ? null : project.floorBeside(current, guidePlaces);
+            } else if (guidePlaces == -1 && !floors.isEmpty()) {
+                floor = floors.get(floors.size() - 1); // a new map, not saved yet, will come last
+            }
+        }
+        DungeonMap map = null;
+        if (floor != null) {
+            try {
+                map = MapLoader.load(project.root().resolve(floor));
+                info += (info.isEmpty() ? "" : ", ") + "guide: " + map.name();
+            } catch (IOException | IllegalArgumentException e) {
+                status("Couldn't read " + floor + " for the guide: " + e.getMessage());
+            }
+        }
+        canvas.setGuide(map == null ? null : new MapCanvas.Guide(map, current));
+        side.setFloorInfo(info);
+        return map == null ? null : map.name();
     }
 
     /** The game starts on this map. */

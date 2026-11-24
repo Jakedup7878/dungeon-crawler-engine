@@ -56,8 +56,7 @@ Damage is attack x (85% to 115%) minus half the target's defense, at least 1. Th
 
 Stairs join the maps of a project. They go on a wall of a cell (the picture covers the wall, and the cell stays free)
 or in the middle of the floor (filling the cell). Walking into them takes the party to another floor, and each floor remembers what
-has been explored, opened and triggered. In the editor, make another map (**File > New**, saved in the project's `maps`
-folder), then place **Stairs** (tool 9) and choose the floor they lead to and where the party arrives: that floor's
+has been explored, opened and triggered. In the editor, add another floor (**Project > Add Floor**), then place **Stairs** (tool 9) and choose the floor they lead to and where the party arrives: that floor's
 start, in front of its stairs, or any cell. Put stairs on both floors to go there and back. Stairs to the same floor work as
 a teleporter. A floor that's missing, or an arrival cell the party can't stand on, is reported before the game starts.
 
@@ -97,6 +96,17 @@ so anything you make there runs in the game, and you can still open the files in
 | **7 / T** Chest   | Click a floor cell: a chest to open          | Remove an event, chest or NPC   |
 | **8 / N** NPC     | Click a floor cell: someone to talk to; untick "Players can walk through" to make them block the way | Remove an event, chest or NPC   |
 | **9 / U** Stairs  | Click a floor cell: stairs to another floor  | Remove an event, chest, NPC or stairs |
+
+### Several floors
+
+**Project > Floors** lists the project's floors in order: open one, add one, move it, or make it the starting floor.
+**Project > Add Floor** makes a new one before or after the open floor, blank or with the same rooms and walls.
+Ctrl+Up and Ctrl+Down open the previous and next floor.
+
+**View > Floor Guide** shows the previous (or next) floor faintly underneath the one you're drawing, cell for cell, so
+shafts, towers and stairwells line up. Ctrl+G switches the previous floor's guide on and off. Pink areas are its rooms,
+dashed lines its walls, triangles its stairs, and rings where those stairs come out on this floor. The guide shows the
+other floor as last saved, and is never part of the map.
 
 With the Event, Chest, NPC or Stairs tool, click an object to edit it, or drag it to another cell.
 

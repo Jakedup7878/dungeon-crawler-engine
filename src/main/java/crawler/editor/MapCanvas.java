@@ -4,6 +4,7 @@ import crawler.core.CellType;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
+import crawler.core.Floors;
 import crawler.core.MapObject;
 import crawler.core.ObjectType;
 import crawler.render.ObjectLooks;
@@ -63,6 +64,7 @@ final class MapCanvas extends JComponent implements Scrollable {
     private static final Color WALL = new Color(210, 220, 240);
     private static final Color DOOR = new Color(236, 168, 64);
     private static final Color DOOR_EDGE = new Color(120, 70, 20);
+    private static final Color GUIDE = new Color(255, 150, 200);
     private static final Color START = new Color(255, 214, 92);
     private static final Color UNREACHABLE = new Color(230, 60, 60, 90);
     private static final Color HOVER = new Color(110, 215, 255);
@@ -102,6 +104,15 @@ final class MapCanvas extends JComponent implements Scrollable {
     private Tool tool = Tool.ROOM;
     private int zoom = DEFAULT_ZOOM;
     private boolean showUnreachable = true;
+    private Guide guide;
+
+    /**
+     * Another floor shown faintly underneath, to line this one up with.
+     *
+     * @param thisFloor the open floor's file, to mark where the other's stairs arrive on it; or null
+     */
+    record Guide(DungeonMap map, String thisFloor) {
+    }
     private Direction previewFacing = Direction.NORTH;
 
     private int hoverX = -1;
@@ -195,6 +206,12 @@ final class MapCanvas extends JComponent implements Scrollable {
 
     void setShowUnreachable(boolean show) {
         showUnreachable = show;
+        repaint();
+    }
+
+    /** Shows another floor as a guide; null for none. */
+    void setGuide(Guide guide) {
+        this.guide = guide;
         repaint();
     }
 
@@ -681,6 +698,9 @@ final class MapCanvas extends JComponent implements Scrollable {
             g.setColor(OUTLINE);
             g.drawRect(ox - 1, oy - 1, width * z + 2, height * z + 2);
 
+            if (guide != null) {
+                drawGuide(g, map, ox, oy);
+            }
             float stroke = Math.max(2f, z / 9f);
             g.setStroke(new BasicStroke(stroke, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER));
             for (int line = y0; line <= y1 + 1; line++) {
@@ -705,6 +725,65 @@ final class MapCanvas extends JComponent implements Scrollable {
                     map.startFacing().angle(), z, START, 255);
             drawToolOverlay(g, map, ox, oy);
             drawRulers(g, map, ox, oy, x0, x1, y0, y1);
+        } finally {
+            g.dispose();
+        }
+    }
+
+    /** The guide floor: its cells tinted, its walls dashed, its stairs marked. Same coordinates as this floor. */
+    private void drawGuide(Graphics2D graphics, DungeonMap map, int ox, int oy) {
+        Graphics2D g = (Graphics2D) graphics.create();
+        DungeonMap other = guide.map();
+        int z = zoom;
+        try {
+            g.clipRect(ox - 1, oy - 1, map.width() * z + 3, map.height() * z + 3);
+            g.setColor(withAlpha(GUIDE, 38));
+            for (int y = 0; y < Math.min(map.height(), other.height()); y++) {
+                for (int x = 0; x < Math.min(map.width(), other.width()); x++) {
+                    if (other.cell(x, y).walkable) {
+                        g.fillRect(ox + x * z, oy + y * z, z, z);
+                    }
+                }
+            }
+            g.setColor(withAlpha(GUIDE, 170));
+            g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{4f, 3f}, 0f));
+            for (int y = 0; y <= other.height(); y++) {
+                for (int x = 0; x <= other.width(); x++) {
+                    for (EdgeRef edge : new EdgeRef[]{new EdgeRef(true, x, y), new EdgeRef(false, x, y)}) {
+                        boolean beyond = edge.horizontal() ? x == other.width() : y == other.height();
+                        if (!beyond && edge.get(other) != EdgeType.OPEN
+                                && (other.cell(edge.beforeX(), edge.beforeY()).walkable
+                                || other.cell(edge.afterX(), edge.afterY()).walkable)) {
+                            int px = ox + x * z;
+                            int py = oy + y * z;
+                            g.drawLine(px, py, edge.horizontal() ? px + z : px, edge.horizontal() ? py : py + z);
+                        }
+                    }
+                }
+            }
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(GUIDE);
+            g.setStroke(new BasicStroke(1.5f));
+            for (MapObject o : other.objects()) {
+                if (o.type() != ObjectType.STAIRS) {
+                    continue;
+                }
+                // Where the stairs are, as a triangle; where they come out on this floor, as a ring.
+                int px = ox + o.x() * z;
+                int py = oy + o.y() * z;
+                int a = py + z / 4;
+                int b = py + z - z / 4;
+                boolean up = o.destination().up();
+                g.drawPolygon(new int[]{px + z / 4, px + z - z / 4, px + z / 2}, up ? new int[]{b, b, a} : new int[]{a, a, b}, 3);
+                if (guide.thisFloor() != null && guide.thisFloor().equals(o.destination().map())) {
+                    Floors.Arrival at = Floors.arrival(map, o.destination());
+                    int ax = at != null ? at.x() : o.destination().x();
+                    int ay = at != null ? at.y() : o.destination().y();
+                    if (map.inBounds(ax, ay)) {
+                        g.drawOval(ox + ax * z + z / 8, oy + ay * z + z / 8, z - z / 4, z - z / 4);
+                    }
+                }
+            }
         } finally {
             g.dispose();
         }

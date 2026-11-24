@@ -4,6 +4,8 @@ import crawler.core.DungeonMap;
 
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -49,6 +51,44 @@ final class MapDialogs {
         }
         String text = name.getText().strip();
         return new NewMap(text.isEmpty() ? "Untitled" : text, (Integer) width.getValue(), (Integer) height.getValue());
+    }
+
+    /** @param after whether it goes after the open floor rather than before it */
+    record NewFloor(String name, int width, int height, boolean after, boolean copyLayout) {
+    }
+
+    /**
+     * @param name   the name to suggest
+     * @param open   the open floor, for its size and layout
+     * @param placed whether the open floor is in the list, so the new one can go before it
+     */
+    static NewFloor askNewFloor(Component parent, String name, DungeonMap open, boolean placed) {
+        JTextField nameField = new JTextField(name, 18);
+        JSpinner width = sizeSpinner(open.width());
+        JSpinner height = sizeSpinner(open.height());
+        JComboBox<String> place = new JComboBox<>(placed
+                ? new String[]{"After " + open.name(), "Before " + open.name()} : new String[]{"At the end"});
+        JCheckBox copy = new JCheckBox("Start with this floor's rooms and walls");
+        copy.addActionListener(e -> {
+            width.setEnabled(!copy.isSelected());
+            height.setEnabled(!copy.isSelected());
+        });
+        JPanel form = form(
+                new JLabel("Name"), nameField,
+                new JLabel("Place"), place,
+                new JLabel("Width (cells)"), width,
+                new JLabel("Height (cells)"), height,
+                new JLabel(), copy);
+        int answer = JOptionPane.showConfirmDialog(parent, new Object[]{form,
+                ObjectDialog.hint("The floor is saved in the project's maps folder straight away. Join floors with the Stairs "
+                        + "tool. View > Floor Guide shows the previous floor underneath while you draw.")},
+                "Add floor", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) {
+            return null;
+        }
+        String text = nameField.getText().strip();
+        return new NewFloor(text.isEmpty() ? name : text, (Integer) width.getValue(), (Integer) height.getValue(),
+                place.getSelectedIndex() == 0, copy.isSelected());
     }
 
     static Resize askResize(Component parent, DungeonMap map) {
@@ -135,7 +175,8 @@ final class MapDialogs {
                 <b>Edit &gt; Map Settings</b> (Ctrl+M) the floor's music and random battles.
                 Every picture and sound you choose is copied into the project's <code>assets</code> folder when you save.</p>
                 <h3>The rest of the game</h3>
-                <p>The <b>Project</b> menu holds what belongs to the whole game: <b>Settings</b> (party creation,
+                <p>The <b>Project</b> menu holds what belongs to the whole game: <b>Floors</b> (add, open and reorder them; Ctrl+Up and
+                Ctrl+Down switch), <b>Settings</b> (party creation,
                 starting gold, the default NPC and chest looks, battle and victory music), <b>Party Members</b>,
                 <b>Classes</b>, <b>Enemies</b>, <b>Enemy Tiers</b>, <b>Items</b> (potions, weapons and armor, with scripts of their own)
                 and <b>Attack Animations</b>. For an animation, put the frames side by side
@@ -146,6 +187,7 @@ final class MapDialogs {
                 <tr><td><b>Ctrl + wheel</b></td><td>Zoom</td></tr>
                 <tr><td><b>Middle drag</b></td><td>Pan</td></tr>
                 <tr><td><b>Q / E</b></td><td>Turn the 3D preview</td></tr>
+                <tr><td><b>Ctrl+G</b></td><td>Show or hide the previous floor as a guide (more in View &gt; Floor Guide)</td></tr>
                 <tr><td><b>Ctrl+Z / Ctrl+Y</b></td><td>Undo / redo</td></tr>
                 <tr><td><b>F5</b></td><td>Play test from the start</td></tr>
                 <tr><td><b>F6</b></td><td>Play test from where the 3D preview is looking</td></tr>
