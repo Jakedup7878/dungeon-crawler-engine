@@ -126,4 +126,20 @@ class SpriteAndLooksTest {
         map.setEdge(0, 1, Direction.NORTH, EdgeType.WALL);
         assertEquals(0, changedPixels(map, 0.5, 2.5));
     }
+
+    @Test
+    void stairsOnAWallAreDrawnOnThatWallOnly() {
+        crawler.core.DungeonMap map = crawler.core.MapLoader.parse("t", List.of("+---+", "| ^ |", "+---+", "", "[stairs 0,0]", "wall = north"));
+        ObjectLooks looks = new ObjectLooks(AssetSource.NONE);
+        assertTrue(looks.billboards(map, o -> false).isEmpty(), "no billboard for stairs on a wall");
+        DungeonRenderer renderer = new DungeonRenderer(64, 48, Textures.defaults());
+        for (crawler.core.Direction facing : crawler.core.Direction.values()) {
+            renderer.render(map, 0.5, 0.5, facing.angle());
+            int plain = renderer.frame().getRGB(32, 24);
+            int[] before = renderer.frame().getRGB(20, 0, 24, 48, null, 0, 24);
+            renderer.render(map, 0.5, 0.5, facing.angle(), List.of(), 0, looks::wallPicture);
+            int[] after = renderer.frame().getRGB(20, 0, 24, 48, null, 0, 24);
+            assertEquals(facing == crawler.core.Direction.NORTH, !java.util.Arrays.equals(before, after), facing + " " + plain);
+        }
+    }
 }

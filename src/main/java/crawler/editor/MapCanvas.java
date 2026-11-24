@@ -385,7 +385,7 @@ final class MapCanvas extends JComponent implements Scrollable {
     private void moveObject(MapObject object, int x, int y) {
         DungeonMap map = doc.map();
         map.removeObject(object.x(), object.y());
-        String problem = MapEdits.objectProblem(map, object.type(), x, y);
+        String problem = MapEdits.objectProblem(map, object.type(), object.solid(), x, y);
         if (problem != null) {
             map.putObject(object); // put it back
             listener.message(problem);
@@ -767,7 +767,7 @@ final class MapCanvas extends JComponent implements Scrollable {
                 && (lastCellX != anchorX || lastCellY != anchorY)) {
             DungeonMap copy = map.copy();
             copy.removeObject(movingObject.x(), movingObject.y());
-            boolean ok = MapEdits.objectProblem(copy, movingObject.type(), lastCellX, lastCellY) == null;
+            boolean ok = MapEdits.objectProblem(copy, movingObject.type(), movingObject.solid(), lastCellX, lastCellY) == null;
             int px = ox + lastCellX * z;
             int py = oy + lastCellY * z;
             drawObject(g, movingObject, px, py, 0.6f);
@@ -835,7 +835,20 @@ final class MapCanvas extends JComponent implements Scrollable {
                 g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, scale >= 1
                         ? RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR
                         : RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g.drawImage(image, px + (z - w) / 2, py + pad + (box - h), w, h, null);
+                if (object.wall() == null) {
+                    g.drawImage(image, px + (z - w) / 2, py + pad + (box - h), w, h, null);
+                } else { // half size, against its wall, with the wall picked out
+                    Direction side = object.wall();
+                    int cx = px + z / 2 + side.dx * z / 5;
+                    int cy = py + z / 2 + side.dy * z / 5;
+                    g.drawImage(image, cx - w / 4, cy - h / 4, w / 2, h / 2, null);
+                    g.setColor(DOOR);
+                    g.setStroke(new BasicStroke(Math.max(3f, z / 9f)));
+                    int ex = px + z / 2 + side.dx * z / 2;
+                    int ey = py + z / 2 + side.dy * z / 2;
+                    g.drawLine(ex - Math.abs(side.dy) * z / 3, ey - Math.abs(side.dx) * z / 3,
+                            ex + Math.abs(side.dy) * z / 3, ey + Math.abs(side.dx) * z / 3);
+                }
             }
             if (object.type() == ObjectType.EVENT) {
                 // Big in the middle when the event is invisible, a small badge in the corner otherwise.

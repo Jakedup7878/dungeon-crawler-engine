@@ -56,7 +56,7 @@ class EditorLogicTest {
         MapEdits.room(map, 2, 2, 6, 6);
         map.setStart(4, 4, Direction.NORTH);
         assertNotNull(MapEdits.objectProblem(map, ObjectType.CHEST, 0, 0), "rock");
-        assertNotNull(MapEdits.objectProblem(map, ObjectType.NPC, 4, 4), "the start");
+        assertNotNull(MapEdits.objectProblem(map, ObjectType.CHEST, 4, 4), "the start");
         assertNull(MapEdits.objectProblem(map, ObjectType.EVENT, 4, 4), "events may sit on the start");
         map.putObject(MapObject.create(ObjectType.NPC, 3, 3));
         assertNotNull(MapEdits.objectProblem(map, ObjectType.CHEST, 3, 3), "taken");

@@ -191,12 +191,13 @@ class GameScreensTest {
     @Test
     void takingStairsShowsTheOtherFloor() throws IOException {
         start(1, false);
-        game.party().place(9, 9, crawler.core.Direction.EAST);
+        game.party().place(9, 9, crawler.core.Direction.WEST);
         key(KeyEvent.VK_SPACE);
         assertEquals("B2F - The Flooded Vault", game.map().name());
         paint();
         run(1);
         paint();
+        game.movement().perform(crawler.core.MoveAction.TURN_AROUND);
         key(KeyEvent.VK_SPACE);
         assertEquals("B1F - The Old Cellars", game.map().name());
         paint();

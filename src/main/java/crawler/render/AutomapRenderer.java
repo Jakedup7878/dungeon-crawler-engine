@@ -52,7 +52,11 @@ public final class AutomapRenderer {
 
             for (int y = 0; y < map.height(); y++) {
                 for (int x = 0; x < map.width(); x++) {
-                    if (!revealAll && !explored.isVisited(x, y)) {
+                    MapObject object = map.object(x, y);
+                    boolean stairs = object != null && object.type() == ObjectType.STAIRS;
+                    // Stairs in the middle of the floor can't be stood on, so seeing them from beside them will do.
+                    if (!revealAll && !explored.isVisited(x, y)
+                            && !(stairs && object.solid() && seenFromBeside(map, explored, x, y))) {
                         continue;
                     }
                     boolean rock = map.cell(x, y) == CellType.ROCK;
@@ -61,9 +65,11 @@ public final class AutomapRenderer {
                     if (!rock) {
                         g.setColor(GRID);
                         g.drawRect(x * cell, y * cell, cell - 1, cell - 1);
-                        MapObject object = map.object(x, y);
-                        if (object != null && object.type() == ObjectType.STAIRS) {
-                            drawStairs(g, x * cell, y * cell, cell, object.destination().up());
+                        if (stairs) {
+                            // On a wall, towards that wall; otherwise in the middle.
+                            int dx = object.wall() == null ? 0 : object.wall().dx * cell / 4;
+                            int dy = object.wall() == null ? 0 : object.wall().dy * cell / 4;
+                            drawStairs(g, x * cell + dx, y * cell + dy, cell, object.destination().up());
                         }
                     }
                 }
@@ -85,6 +91,15 @@ public final class AutomapRenderer {
         } finally {
             g.dispose();
         }
+    }
+
+    private static boolean seenFromBeside(DungeonMap map, Exploration explored, int x, int y) {
+        for (Direction side : Direction.values()) {
+            if (map.edge(x, y, side).passable && explored.isVisited(x + side.dx, y + side.dy)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A triangle pointing the way the stairs go. */

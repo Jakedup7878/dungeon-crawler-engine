@@ -122,7 +122,7 @@ final class SidePanel extends JComponent {
             }
             double seconds = (System.nanoTime() - startNanos) / 1e9;
             renderer.render(map, previewX + 0.5, previewY + 0.5, previewFacing.angle(),
-                    looks.billboards(map, object -> false), seconds);
+                    looks.billboards(map, object -> false), seconds, looks::wallPicture);
             g.drawImage(renderer.frame(), x, y, null);
             g.setColor(FRAME);
             g.drawRect(x - 1, y - 1, PREVIEW_W + 1, PREVIEW_H + 1);

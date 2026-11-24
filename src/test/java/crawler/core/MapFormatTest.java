@@ -71,7 +71,7 @@ class MapFormatTest {
                 Arguments.of("+---+--+\n|   |  |\n+---+--+", "top border"),
                 Arguments.of("+---+---+\n| ^     |", "alternate border and cell rows"),
                 Arguments.of("+---+---+\n| ^     |\n+---+---+\n\n[chests 1,0]", "unknown section"),
-                Arguments.of("+---+---+\n| ^     |\n+---+---+\n\n[npc 0,0]", "start cell"));
+                Arguments.of("+---+---+\n| ^     |\n+---+---+\n\n[chest 0,0]", "start cell"));
     }
 
     @ParameterizedTest

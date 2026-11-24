@@ -18,10 +18,13 @@ import java.util.Objects;
  *                   battle, such as a boss); empty for none
  * @param items      chests only: what the party gets on opening it
  * @param destination stairs only: where they lead
+ * @param wall        stairs only: the side of the cell whose wall they're on, or null for the middle of the floor
+ * @param walkThrough NPCs only: whether the party can walk through it (unless told otherwise, it can)
  */
 public record MapObject(ObjectType type, int x, int y, String name, String text,
                         SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle,
-                        List<ItemStack> items, Destination destination) {
+                        List<ItemStack> items, Destination destination,
+                        Direction wall, boolean walkThrough) {
 
     public MapObject {
         Objects.requireNonNull(type, "type");
@@ -30,6 +33,8 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
         openSprite = type == ObjectType.CHEST ? openSprite : null;
         once = type != ObjectType.EVENT || once;
         destination = type == ObjectType.STAIRS && destination != null ? destination : Destination.NONE;
+        wall = type == ObjectType.STAIRS ? wall : null;
+        walkThrough = type == ObjectType.NPC && walkThrough;
         items = type == ObjectType.CHEST && items != null ? List.copyOf(items) : List.of();
         battle = type == ObjectType.EVENT && battle != null ? List.copyOf(battle) : List.of();
     }
@@ -43,7 +48,7 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     /** Anything but stairs. */
     public MapObject(ObjectType type, int x, int y, String name, String text, SpriteRef sprite, SpriteRef openSprite,
                      boolean once, List<String> battle, List<ItemStack> items) {
-        this(type, x, y, name, text, sprite, openSprite, once, battle, items, Destination.NONE);
+        this(type, x, y, name, text, sprite, openSprite, once, battle, items, Destination.NONE, null, true);
     }
 
     /** An object without items. */
@@ -62,8 +67,9 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
         return new MapObject(type, x, y, name, "", null, null, true);
     }
 
+    /** Whether it keeps the party out of its cell. */
     public boolean solid() {
-        return type.solid;
+        return type.solid && wall == null && !walkThrough;
     }
 
     /** The name, or the type's name if it has none. */
@@ -72,10 +78,15 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     }
 
     public MapObject at(int newX, int newY) {
-        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle, items, destination);
+        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle, items, destination, wall, walkThrough);
+    }
+
+    /** The same stairs on a wall, or (null) in the middle of the floor. */
+    public MapObject onWall(Direction side) {
+        return new MapObject(type, x, y, name, text, sprite, openSprite, once, battle, items, destination, side, walkThrough);
     }
 
     public MapObject withSprites(SpriteRef newSprite, SpriteRef newOpenSprite) {
-        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle, items, destination);
+        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle, items, destination, wall, walkThrough);
     }
 }

@@ -84,13 +84,30 @@ final class MapEdits {
      * on it, and a chest or NPC can't stand where the party starts.
      */
     static String objectProblem(DungeonMap map, ObjectType type, int x, int y) {
+        // New NPCs can be walked through, and new stairs go on a wall if there is one.
+        return objectProblem(map, type, type.solid && type != ObjectType.NPC
+                && !(type == ObjectType.STAIRS && map.inBounds(x, y) && wallBeside(map, x, y) != null), x, y);
+    }
+
+    /** The first side of a cell with a plain wall, or null. */
+    static Direction wallBeside(DungeonMap map, int x, int y) {
+        for (Direction side : Direction.values()) {
+            if (map.edge(x, y, side) == EdgeType.WALL) {
+                return side;
+            }
+        }
+        return null;
+    }
+
+    /** The same for an object that does or doesn't block its cell. */
+    static String objectProblem(DungeonMap map, ObjectType type, boolean solid, int x, int y) {
         if (!map.inBounds(x, y) || !map.cell(x, y).walkable) {
             return "Events, chests, NPCs and stairs go on floor cells.";
         }
         if (map.object(x, y) != null) {
             return "There's already " + map.object(x, y).type().withArticle() + " on that cell.";
         }
-        if (type.solid && x == map.startX() && y == map.startY()) {
+        if (solid && x == map.startX() && y == map.startY()) {
             return "The party starts on that cell, so " + type.withArticle()
                     + " can't stand there. Move the start first (tool 5).";
         }

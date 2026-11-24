@@ -350,7 +350,7 @@ public final class GamePanel extends JPanel {
             }
 
             renderer.render(game.map(), camera.viewX(), camera.viewY(), camera.viewAngle(),
-                    looks.billboards(game.map(), game::isOpened), clock);
+                    looks.billboards(game.map(), game::isOpened), clock, looks::wallPicture);
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             g.drawImage(renderer.frame(), VIEW.x, VIEW.y, VIEW.width, VIEW.height, null);
             if (fade > 0) {

@@ -3,6 +3,7 @@ package crawler.editor;
 import crawler.core.Destination;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
+import crawler.core.EdgeType;
 import crawler.core.Encounters;
 import crawler.core.ItemStack;
 import crawler.core.MapObject;
@@ -38,10 +39,11 @@ final class ObjectDialog {
      * @param looks    the game's looks, so the built-in pictures shown are the project's defaults
      * @param enemyIds the enemy ids the project knows, to suggest for event battles (may be empty)
      * @param itemIds  the same for items, for chests
+     * @param map      the map it's on, for which sides of the cell have walls
      * @param floors   the project's floors by file, for stairs (null values can't be read)
      */
     static MapObject show(Component parent, MapObject object, boolean isNew, AssetStore assets,
-                          ObjectLooks looks, List<String> enemyIds, List<String> itemIds, Map<String, DungeonMap> floors) {
+                          ObjectLooks looks, List<String> enemyIds, List<String> itemIds, Map<String, DungeonMap> floors, DungeonMap map) {
         ObjectType type = object.type();
         JTextField name = new JTextField(object.name(), 28);
         JTextArea text = new JTextArea(object.text(), 6, 36);
@@ -88,6 +90,15 @@ final class ObjectDialog {
         JComboBox<String> way = new JComboBox<>(new String[]{"Down", "Up"});
         way.setSelectedIndex(current.up() ? 1 : 0);
 
+        JComboBox<String> place = new JComboBox<>();
+        for (Direction side : Direction.values()) {
+            place.addItem("On the " + side.displayName().toLowerCase() + " wall"
+                    + (map.edge(object.x(), object.y(), side) == EdgeType.WALL ? "" : "  (no wall there)"));
+        }
+        place.addItem("In the middle of the floor");
+        place.setSelectedIndex(object.wall() == null ? Direction.values().length : object.wall().ordinal());
+        JCheckBox walkThrough = new JCheckBox("Players can walk through", object.walkThrough());
+
         JPanel form = switch (type) {
             case STAIRS -> MapDialogs.form(
                     new JLabel("Name"), name,
@@ -100,6 +111,9 @@ final class ObjectDialog {
                     new JLabel(), hint("'start' (that floor's start), or a cell and a direction to face, like 3,4,north. "
                             + "The list offers that floor's stairs."),
                     new JLabel("Looks like"), way,
+                    new JLabel("Placed"), place,
+                    new JLabel(), hint("The party takes stairs by walking into them. On a wall, the picture covers the wall and "
+                            + "the cell stays free; in the middle of the floor, they fill the cell."),
                     new JLabel("Message"), new JScrollPane(text),
                     new JLabel(), hint("Shown on arrival. Leave empty for none."),
                     new JLabel("Picture"), sprite);
@@ -128,7 +142,9 @@ final class ObjectDialog {
             case NPC -> MapDialogs.form(
                     new JLabel("Name"), name,
                     new JLabel("Dialogue"), new JScrollPane(text),
-                    new JLabel(), hint("What they say when the party walks up to them. Long text is shown a page at a time."),
+                    new JLabel(), walkThrough,
+                    new JLabel(), hint("What they say when the party presses Space beside them, or walks into them if they block the way. "
+                            + "Long text is shown a page at a time."),
                     new JLabel("Picture"), sprite);
         };
         String note = "Pictures are copied into the 'assets' folder when you save. PNGs with a transparent "
@@ -153,22 +169,26 @@ final class ObjectDialog {
         }
         return new MapObject(type, object.x(), object.y(), name.getText(), text.getText(),
                 sprite.sprite(), opened == null ? null : opened.sprite(), once.isSelected(),
-                Encounters.parseIds(battle.getText()), stacks, destination);
+                Encounters.parseIds(battle.getText()), stacks, destination,
+                place.getSelectedIndex() < Direction.values().length ? Direction.values()[place.getSelectedIndex()] : null,
+                walkThrough.isSelected());
     }
 
-    /** Where stairs on a floor can be arrived at, facing a side the party can walk off. */
+    /** Where the party can arrive by a floor's stairs: in front of them, facing away. */
     static List<String> arrivals(DungeonMap map) {
         List<String> out = new ArrayList<>();
         for (MapObject o : map.objects()) {
             if (o.type() == ObjectType.STAIRS) {
-                Direction facing = Direction.NORTH;
+                if (o.wall() != null) {
+                    out.add(new Destination("", o.x(), o.y(), o.wall().opposite(), false).arrivalText());
+                    continue;
+                }
                 for (Direction d : Direction.values()) {
                     if (map.canStep(o.x(), o.y(), d)) {
-                        facing = d;
+                        out.add(new Destination("", o.x() + d.dx, o.y() + d.dy, d, false).arrivalText());
                         break;
                     }
                 }
-                out.add(new Destination("", o.x(), o.y(), facing, false).arrivalText());
             }
         }
         return out;

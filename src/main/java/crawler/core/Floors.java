@@ -59,6 +59,35 @@ public final class Floors {
         return new Floors(start, maps);
     }
 
+    /** Where the party ends up, and which way it faces. */
+    public record Arrival(int x, int y, Direction facing) {
+    }
+
+    /**
+     * Where the party arrives, or null if it can't. Arriving on stairs in the middle of the floor
+     * means stepping off them: the way it's to face if possible, or any way that's free.
+     */
+    public static Arrival arrival(DungeonMap map, Destination to) {
+        int x = to.atStart() ? map.startX() : to.x();
+        int y = to.atStart() ? map.startY() : to.y();
+        Direction facing = to.atStart() ? map.startFacing() : to.facing();
+        if (!map.inBounds(x, y) || !map.cell(x, y).walkable) {
+            return null;
+        }
+        if (!map.isBlocked(x, y)) {
+            return new Arrival(x, y, facing);
+        }
+        if (map.object(x, y).type() == ObjectType.STAIRS) {
+            for (int i = 0; i < 4; i++) {
+                if (map.canStep(x, y, facing)) {
+                    return new Arrival(x + facing.dx, y + facing.dy, facing);
+                }
+                facing = facing.turnRight();
+            }
+        }
+        return null;
+    }
+
     /** Why the party can't arrive there ("lead to ..."), or null if it can. */
     public static String arrivalProblem(DungeonMap map, Destination to) {
         int x = to.atStart() ? map.startX() : to.x();
@@ -66,7 +95,7 @@ public final class Floors {
         if (!map.inBounds(x, y)) {
             return "lead to cell " + x + ", " + y + " of " + to.map() + ", which is outside that floor.";
         }
-        if (!map.cell(x, y).walkable || map.isBlocked(x, y)) {
+        if (arrival(map, to) == null) {
             return "lead to cell " + x + ", " + y + " of " + to.map() + ", where the party can't stand.";
         }
         return null;

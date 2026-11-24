@@ -15,10 +15,11 @@ encounters = giant-rat, tier:elite
 encounter_rate = 8
 group = 1-2
 
-[stairs 1,1]
+[stairs 0,1]
 name = You climb the worn steps
 to = maps/b1f.txt
 arrive = 9,9,east
+wall = west
 way = up
 
 [chest 5,3]

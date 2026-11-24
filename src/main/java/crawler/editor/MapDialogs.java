@@ -126,8 +126,8 @@ final class MapDialogs {
                 <tr><td><b>5 / S</b></td><td>Start: where the party begins; click it again to turn.</td></tr>
                 <tr><td><b>6 / V</b></td><td>Event: a message when the party steps on the cell. Invisible unless you give it an image.</td></tr>
                 <tr><td><b>7 / T</b></td><td>Chest: the party opens it by walking into it.</td></tr>
-                <tr><td><b>8 / N</b></td><td>NPC: someone to talk to by walking into them. Looks like a spinning top until you give it an image.</td></tr>
-                <tr><td><b>9 / U</b></td><td>Stairs: take the party to another floor of the project.</td></tr>
+                <tr><td><b>8 / N</b></td><td>NPC: someone to talk to with Space. Can be made to block the way. Looks like a spinning top until you give it an image.</td></tr>
+                <tr><td><b>9 / U</b></td><td>Stairs: on a wall or in the middle of the floor. Walking into them takes the party to another floor.</td></tr>
                 <tr><td><b>Right mouse</b></td><td>Does the opposite: fills with rock, removes walls, doors and objects.</td></tr>
                 </table>
                 <p>With the Event, Chest, NPC or Stairs tool, click an object to edit it and drag it to move it.

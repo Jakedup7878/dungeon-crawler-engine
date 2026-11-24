@@ -41,7 +41,7 @@ import java.util.Set;
  * Contains no Swing code, so it can be driven by tests or a different front end.
  *
  * <p>Objects on the map come alive here: walking into a chest opens it, walking into an
- * NPC talks to it, and stepping onto an event's cell sets it off. Each produces a
+ * NPC that blocks the way talks to it, and stepping onto an event's cell sets it off. Each produces a
  * {@link GameMessage} the player reads before carrying on. Walking around can also start
  * a {@link Battle}: random encounters set per map, or fixed battles set on events.
  */
@@ -113,16 +113,16 @@ public final class Game {
                 if (here != null && here.type() == ObjectType.EVENT) {
                     trigger(here);
                 }
-                if (here != null && here.type() == ObjectType.STAIRS && travel(here)) {
-                    return; // nothing jumps out on the stairs
-                }
                 if (battle == null && map.encounters().active() && random.nextInt(100) < map.encounters().rate()) {
                     startRandomBattle();
                 }
             }
             case BLOCKED -> {
                 MapObject ahead = map.object(result.fromX() + result.travel().dx, result.fromY() + result.travel().dy);
-                if (result.edge().passable && ahead != null && ahead.solid()) {
+                MapObject here = map.object(result.fromX(), result.fromY());
+                if (onWall(here, result.travel())) {
+                    travel(here);
+                } else if (result.edge().passable && ahead != null && ahead.solid()) {
                     use(ahead);
                 } else {
                     log.add(result.edge() == EdgeType.WALL ? "Ouch! There's a wall there." : "You can't go that way.");
@@ -137,16 +137,26 @@ public final class Game {
         Direction facing = party.facing();
         MapObject ahead = map.object(party.x() + facing.dx, party.y() + facing.dy);
         MapObject here = map.object(party.x(), party.y());
-        boolean nothingAhead = ahead == null || !ahead.solid() || !map.edge(party.x(), party.y(), facing).passable;
-        if (nothingAhead && here != null && here.type() == ObjectType.STAIRS) {
-            return travel(here); // having just arrived on them, say
+        if (onWall(here, facing)) {
+            return travel(here);
         }
-        if (ahead == null || !ahead.solid() || !map.edge(party.x(), party.y(), facing).passable) {
+        boolean nothingAhead = ahead == null || !(ahead.solid() || ahead.type() == ObjectType.NPC)
+                || !map.edge(party.x(), party.y(), facing).passable;
+        if (nothingAhead && here != null && here.type() == ObjectType.NPC) {
+            use(here); // one that can be walked through, in the party's own cell
+            return true;
+        }
+        if (nothingAhead) {
             log.add("There's nothing there.");
             return false;
         }
         use(ahead);
         return true;
+    }
+
+    /** Whether an object in the party's cell is stairs on the wall on this side. */
+    private boolean onWall(MapObject object, Direction side) {
+        return object != null && object.wall() == side && map.edge(object.x(), object.y(), side) == EdgeType.WALL;
     }
 
     private void use(MapObject object) {
@@ -179,7 +189,8 @@ public final class Game {
     private boolean travel(MapObject stairs) {
         Destination to = stairs.destination();
         DungeonMap next = to.isSet() ? floors.get(to.map()) : null;
-        if (next == null || Floors.arrivalProblem(next, to) != null) {
+        Floors.Arrival at = next == null ? null : Floors.arrival(next, to);
+        if (at == null) {
             log.add("The way is blocked.");
             return false;
         }
@@ -187,8 +198,7 @@ public final class Game {
         map = next;
         floor = states.computeIfAbsent(to.map(), k -> new FloorState(next));
         movement.setMap(next);
-        party.place(to.atStart() ? next.startX() : to.x(), to.atStart() ? next.startY() : to.y(),
-                to.atStart() ? next.startFacing() : to.facing());
+        party.place(at.x(), at.y(), at.facing());
         floor.exploration().visit(party.x(), party.y());
         travels++;
         if (!sameFloor) {

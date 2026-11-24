@@ -84,11 +84,13 @@ public final class MapWriter {
                     field(out, "sprite", object.sprite());
                     field(out, "to", object.destination().map());
                     field(out, "arrive", object.destination().arrivalText());
+                    field(out, "wall", object.wall() == null ? null : object.wall().name().toLowerCase(java.util.Locale.ROOT));
                     field(out, "way", object.destination().up() ? "up" : "down");
                 }
                 case NPC -> {
                     field(out, "text", object.text());
                     field(out, "sprite", object.sprite());
+                    field(out, "walk_through", object.walkThrough() ? null : "no");
                 }
             }
         }

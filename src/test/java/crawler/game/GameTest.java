@@ -71,6 +71,7 @@ class GameTest {
         assertNull(game.message(), "a one-time event doesn't happen again");
         game.movement().perform(MoveAction.FORWARD);
         game.movement().perform(MoveAction.FORWARD);
+        game.interact();
         assertEquals("Sage", game.message().title());
     }
 

@@ -39,7 +39,7 @@ class ItemFormTest {
     @Test
     void stairsAreCheckedAndOffered() {
         DungeonMap map = MapLoader.parse("t", List.of("+---+---+", "| >     |", "+---+---+", "",
-                "[stairs 1,0]", "to = maps/b.txt", "arrive = 1,0,w"));
+                "[stairs 1,0]", "to = maps/b.txt", "arrive = 1,0,w", "wall = east"));
         java.util.Map<String, DungeonMap> floors = new java.util.HashMap<>();
         assertTrue(stairsProblem(map, floors, "doesn't exist"));
         floors.put("maps/b.txt", null);
@@ -48,7 +48,15 @@ class ItemFormTest {
         assertTrue(!stairsProblem(map, floors, "stairs"));
         floors.put("maps/b.txt", MapLoader.parse("t", List.of("+---+---+", "| > |###|", "+---+---+")));
         assertTrue(stairsProblem(map, floors, "can't stand"));
-        assertTrue(ObjectDialog.arrivals(map).equals(List.of("1,0,west")), "facing the way off the stairs");
+        assertTrue(stairsProblem(map.copy(), floors, "can't stand"));
+        MapObject middle = map.object(1, 0).onWall(null);
+        assertTrue(middle.solid() && !map.object(1, 0).solid());
+        DungeonMap other = map.copy();
+        other.putObject(middle);
+        assertTrue(ObjectDialog.arrivals(other).equals(List.of("0,0,west")));
+        other.putObject(middle.onWall(crawler.core.Direction.WEST));
+        assertTrue(stairsProblem(other, floors, "no wall there"));
+        assertTrue(ObjectDialog.arrivals(map).equals(List.of("1,0,west")), "facing away from the wall");
     }
 
     private static boolean stairsProblem(DungeonMap map, java.util.Map<String, DungeonMap> floors, String text) {

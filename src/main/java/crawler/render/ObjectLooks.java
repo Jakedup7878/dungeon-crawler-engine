@@ -8,9 +8,11 @@ import crawler.core.ObjectType;
 import crawler.core.ProjectSettings;
 import crawler.core.SpriteRef;
 
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +37,8 @@ public final class ObjectLooks {
 
     private final AssetSource assets;
     private final Map<SpriteRef, Optional<Sprite>> custom = new HashMap<>();
+    /** Walls with pictures on them, by the picture and the wall. */
+    private final Map<BufferedImage, Map<Texture, Texture>> wallPictures = new IdentityHashMap<>();
     private SpriteRef npcDefault;
     private SpriteRef chestDefault;
     private SpriteRef chestOpenDefault;
@@ -171,15 +175,34 @@ public final class ObjectLooks {
         List<Billboard> billboards = new ArrayList<>();
         for (MapObject object : map.objects()) {
             Sprite sprite = look(object, opened.test(object));
-            if (sprite != null) {
+            if (sprite != null && object.wall() == null) {
                 billboards.add(new Billboard(object.x() + 0.5, object.y() + 0.5, sprite, height(object.type())));
             }
         }
         return billboards;
     }
 
+    /** The wall with the picture of whatever is on it, stretched over the whole wall; see-through parts show the wall. */
+    public Texture wallPicture(MapObject object, Texture wall, double seconds) {
+        Sprite sprite = look(object, false);
+        if (sprite == null) {
+            return wall;
+        }
+        BufferedImage picture = sprite.image(seconds);
+        return wallPictures.computeIfAbsent(picture, p -> new IdentityHashMap<>()).computeIfAbsent(wall, w -> {
+            int size = Math.max(w.size, Texture.fromAnyImage(picture).size);
+            BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = image.createGraphics();
+            g.drawImage(w.toImage(), 0, 0, size, size, null);
+            g.drawImage(picture, 0, 0, size, size, null);
+            g.dispose();
+            return Texture.fromImage(image);
+        });
+    }
+
     /** Forgets pictures read so far (after the asset folder changes). */
     public void clear() {
         custom.clear();
+        wallPictures.clear();
     }
 }

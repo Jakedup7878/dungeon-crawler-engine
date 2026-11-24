@@ -247,7 +247,7 @@ public final class DungeonMap {
         return Collections.unmodifiableCollection(objects.values());
     }
 
-    /** Whether a chest or NPC stands in (x, y), so the party can't enter it. */
+    /** Whether something solid (a chest, an NPC, stairs) stands in (x, y), so the party can't enter it. */
     public boolean isBlocked(int x, int y) {
         MapObject object = object(x, y);
         return object != null && object.solid();

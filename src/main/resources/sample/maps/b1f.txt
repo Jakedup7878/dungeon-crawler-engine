@@ -57,5 +57,6 @@ battle = rat-king, giant-rat
 [stairs 9,9]
 name = You take the worn steps down
 to = maps/b2f.txt
-arrive = 1,1,east
+arrive = 0,1,east
+wall = west
 way = down

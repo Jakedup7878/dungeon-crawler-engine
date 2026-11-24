@@ -1029,7 +1029,7 @@ final class EditorFrame extends JFrame {
         MapObject existing = map.object(x, y);
         MapObject edited;
         if (existing != null) {
-            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds(), itemIds(), floors());
+            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds(), itemIds(), floors(), map);
         } else {
             Tool tool = canvas.tool();
             if (!tool.placesObjects()) {
@@ -1040,9 +1040,15 @@ final class EditorFrame extends JFrame {
                 status(problem);
                 return;
             }
-            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds(), itemIds(), floors());
+            MapObject created = MapObject.create(tool.objectType, x, y).onWall(MapEdits.wallBeside(map, x, y));
+            edited = ObjectDialog.show(this, created, true, assets, looks, enemyIds(), itemIds(), floors(), map);
         }
         if (edited == null || edited.equals(existing)) {
+            return;
+        }
+        if (edited.solid() && x == map.startX() && y == map.startY()) {
+            JOptionPane.showMessageDialog(this, "The party starts on that cell, so nothing solid can stand there.\n"
+                    + "Move the start first (tool 5).", APP, JOptionPane.WARNING_MESSAGE);
             return;
         }
         doc.beginEdit();

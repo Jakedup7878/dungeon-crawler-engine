@@ -30,11 +30,11 @@ enum Tool {
                     + "Click a chest to edit it, or drag it to move it.",
             "Right-click: remove an event, chest, NPC or stairs."),
     NPC("NPC", KeyEvent.VK_8, KeyEvent.VK_N, ObjectType.NPC,
-            "Click a floor cell: add a character. The party talks to it by walking into it. "
+            "Click a floor cell: add a character. The party talks to it with Space. "
                     + "Click one to edit it, or drag it to move it.",
             "Right-click: remove an event, chest, NPC or stairs."),
     STAIRS("Stairs", KeyEvent.VK_9, KeyEvent.VK_U, ObjectType.STAIRS,
-            "Click a floor cell: add stairs to another floor. Stepping on them takes the party there. "
+            "Click a floor cell: add stairs to another floor, on one of its walls or in the middle. Walking into them takes the party there. "
                     + "Click them to edit, or drag them to move them.",
             "Right-click: remove an event, chest, NPC or stairs.");
 

@@ -31,7 +31,7 @@ battles, an NPC, a chest, an event, and a boss behind the closet door.
 | A / D           | Strafe left / right            | Choose a target              |
 | Q / E, Left / Right | Turn left / right          | Choose a target              |
 | X               | Turn around                    |                              |
-| Space / Enter   | Open or talk to what's in front; take the stairs you stand on; next page / close a message | Confirm; hurry the animations |
+| Space / Enter   | Open or talk to what's in front; take the stairs in front; next page / close a message | Confirm; hurry the animations |
 | Esc / Backspace |                                | Back to the previous member  |
 | I / Tab         | Items and equipment            |                              |
 | M               | Reveal the whole automap (debug) |                            |
@@ -54,10 +54,11 @@ Damage is attack x (85% to 115%) minus half the target's defense, at least 1. Th
 
 ## Floors
 
-Stairs join the maps of a project. Stepping onto them takes the party to another floor, and each floor remembers what
+Stairs join the maps of a project. They go on a wall of a cell (the picture covers the wall, and the cell stays free)
+or in the middle of the floor (filling the cell). Walking into them takes the party to another floor, and each floor remembers what
 has been explored, opened and triggered. In the editor, make another map (**File > New**, saved in the project's `maps`
 folder), then place **Stairs** (tool 9) and choose the floor they lead to and where the party arrives: that floor's
-start, one of its stairs, or any cell. Put stairs on both floors to go there and back. Stairs to the same floor work as
+start, in front of its stairs, or any cell. Put stairs on both floors to go there and back. Stairs to the same floor work as
 a teleporter. A floor that's missing, or an arrival cell the party can't stand on, is reported before the game starts.
 
 ## Enemy tiers
@@ -94,7 +95,7 @@ so anything you make there runs in the game, and you can still open the files in
 | **5 / S** Start   | Place the party's start; click again to turn | Turn the other way              |
 | **6 / V** Event   | Click a floor cell: a message (or battle) when the party steps there | Remove an event, chest or NPC |
 | **7 / T** Chest   | Click a floor cell: a chest to open          | Remove an event, chest or NPC   |
-| **8 / N** NPC     | Click a floor cell: someone to talk to       | Remove an event, chest or NPC   |
+| **8 / N** NPC     | Click a floor cell: someone to talk to; untick "Players can walk through" to make them block the way | Remove an event, chest or NPC   |
 | **9 / U** Stairs  | Click a floor cell: stairs to another floor  | Remove an event, chest, NPC or stairs |
 
 With the Event, Chest, NPC or Stairs tool, click an object to edit it, or drag it to another cell.
@@ -244,7 +245,8 @@ opened = assets/chest-open.png
 
 [stairs 9,9]
 to = maps/b2f.txt
-arrive = 1,1,east
+arrive = 0,1,east
+wall = west
 way = down
 
 [event 10,9]

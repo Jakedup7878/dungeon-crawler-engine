@@ -53,8 +53,9 @@ import java.util.regex.Pattern;
  *       {@code potion x2, iron-sword}), {@code sprite}, {@code opened}.</li>
  *   <li>{@code [stairs x,y]}: {@code name}, {@code text}, {@code sprite}, {@code to} (the floor's file, such as
  *       {@code maps/b2f.txt}), {@code arrive} ({@code start}, or {@code 3,4,north}), {@code way} ({@code up} or
- *       {@code down}, for the built-in look).</li>
- *   <li>{@code [npc x,y]}: {@code name}, {@code text}, {@code sprite}.</li>
+ *       {@code down}, for the built-in look), {@code wall} (the side of the cell they're on, such as
+ *       {@code north}; left out, they're in the middle of the floor).</li>
+ *   <li>{@code [npc x,y]}: {@code name}, {@code text}, {@code sprite}, {@code walk_through} (yes/no; yes if left out).</li>
  * </ul>
  * Image paths are relative to the map file. In text, {@code \n} starts a new line.
  *
@@ -67,8 +68,8 @@ public final class MapLoader {
     private static final Map<ObjectType, Set<String>> OBJECT_KEYS = Map.of(
             ObjectType.EVENT, Set.of("name", "text", "once", "sprite", "battle"),
             ObjectType.CHEST, Set.of("name", "contents", "items", "sprite", "opened"),
-            ObjectType.NPC, Set.of("name", "text", "sprite"),
-            ObjectType.STAIRS, Set.of("name", "text", "sprite", "to", "arrive", "way"));
+            ObjectType.NPC, Set.of("name", "text", "sprite", "walk_through"),
+            ObjectType.STAIRS, Set.of("name", "text", "sprite", "to", "arrive", "way", "wall"));
 
     private MapLoader() {
     }
@@ -305,10 +306,6 @@ public final class MapLoader {
             throw error(source, section.line(), "there is already " + map.object(x, y).type().withArticle()
                     + " on cell " + x + "," + y);
         }
-        if (type.solid && hasStart && x == map.startX() && y == map.startY()) {
-            throw error(source, section.line(), type.withArticle() + " can't stand on the start cell "
-                    + x + "," + y + ": the party would have nowhere to stand");
-        }
         Set<String> allowed = OBJECT_KEYS.get(type);
         for (String key : section.values().keySet()) {
             if (!allowed.contains(key)) {
@@ -317,6 +314,22 @@ public final class MapLoader {
             }
         }
         Map<String, String> v = section.values();
+        boolean walkThrough = switch (v.getOrDefault("walk_through", "yes").strip().toLowerCase()) {
+            case "yes", "true" -> true;
+            case "no", "false" -> false;
+            default -> throw error(source, section.keyLines().get("walk_through"), "walk_through should be yes or no");
+        };
+        Direction wall = null;
+        if (v.containsKey("wall")) {
+            for (Direction d : Direction.values()) {
+                if (d.name().equalsIgnoreCase(v.get("wall").strip())) {
+                    wall = d;
+                }
+            }
+            if (wall == null) {
+                throw error(source, section.keyLines().get("wall"), "wall should be north, east, south or west");
+            }
+        }
         boolean once = true;
         if (v.containsKey("once")) {
             String value = v.get("once").toLowerCase();
@@ -345,9 +358,14 @@ public final class MapLoader {
         } catch (IllegalArgumentException e) {
             throw error(source, section.keyLines().get("arrive"), e.getMessage());
         }
-        map.putObject(new MapObject(type, x, y, v.getOrDefault("name", ""), text,
+        MapObject object = new MapObject(type, x, y, v.getOrDefault("name", ""), text,
                 SpriteRef.parse(v.get("sprite")), SpriteRef.parse(v.get("opened")), once,
-                Encounters.parseIds(v.get("battle")), items, destination));
+                Encounters.parseIds(v.get("battle")), items, destination, wall, walkThrough);
+        if (object.solid() && hasStart && x == map.startX() && y == map.startY()) {
+            throw error(source, section.line(), type.withArticle() + " can't stand on the start cell "
+                    + x + "," + y + ": the party would have nowhere to stand");
+        }
+        map.putObject(object);
     }
 
     /** {@code \n} is a line break and {@code \\} a backslash. */

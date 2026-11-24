@@ -1,7 +1,9 @@
 package crawler.render;
 
+import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
+import crawler.core.MapObject;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -45,6 +47,13 @@ public final class DungeonRenderer {
     private static final double NEAR_CLIP = 0.75;
     /** Billboards are never wider than this many cells. */
     private static final double MAX_BILLBOARD_WIDTH = 0.95;
+
+    /** How a wall looks where something is on it. */
+    public interface WallPictures {
+        /** The wall with the object's picture on it; {@code wall} is how it looks without. */
+        Texture picture(MapObject object, Texture wall, double seconds);
+    }
+
 
     private final int width;
     private final int height;
@@ -96,6 +105,12 @@ public final class DungeonRenderer {
      */
     public void render(DungeonMap map, double cameraX, double cameraY, double angle,
                        List<Billboard> billboards, double seconds) {
+        render(map, cameraX, cameraY, angle, billboards, seconds, (object, wall, time) -> wall);
+    }
+
+    /** Draws the view as above, with pictures on the walls that have something on them (such as stairs). */
+    public void render(DungeonMap map, double cameraX, double cameraY, double angle,
+                       List<Billboard> billboards, double seconds, WallPictures pictures) {
         double dirX = Math.sin(angle);
         double dirY = -Math.cos(angle);
         double planeX = -dirY * PLANE; // the view plane points to the camera's right
@@ -104,7 +119,7 @@ public final class DungeonRenderer {
         double eyeY = cameraY - dirY * EYE_BACK_OFFSET;
 
         drawFloorAndCeiling(eyeX, eyeY, dirX, dirY, planeX, planeY);
-        drawWalls(map, eyeX, eyeY, dirX, dirY, planeX, planeY);
+        drawWalls(map, eyeX, eyeY, dirX, dirY, planeX, planeY, pictures, seconds);
         if (!billboards.isEmpty()) {
             drawBillboards(billboards, seconds, eyeX, eyeY, dirX, dirY);
         }
@@ -145,7 +160,8 @@ public final class DungeonRenderer {
     }
 
     private void drawWalls(DungeonMap map, double eyeX, double eyeY,
-                           double dirX, double dirY, double planeX, double planeY) {
+                           double dirX, double dirY, double planeX, double planeY,
+                           WallPictures pictures, double seconds) {
         int half = height / 2;
 
         for (int col = 0; col < width; col++) {
@@ -200,6 +216,14 @@ public final class DungeonRenderer {
             along -= Math.floor(along);
 
             Texture texture = textures.forEdge(hit);
+            MapObject object = hit == EdgeType.WALL ? map.object(cellX, cellY) : null;
+            if (object != null && object.wall() != null) {
+                Direction side = verticalLine ? (stepX > 0 ? Direction.EAST : Direction.WEST)
+                        : (stepY > 0 ? Direction.SOUTH : Direction.NORTH);
+                if (object.wall() == side) {
+                    texture = pictures.picture(object, texture, seconds);
+                }
+            }
             int texX = Math.min(texture.size - 1, (int) (along * texture.size));
             // Keep textures the right way round whichever side of the wall you see.
             if ((verticalLine && rayX < 0) || (!verticalLine && rayY > 0)) {

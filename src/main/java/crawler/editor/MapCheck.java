@@ -106,6 +106,10 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
             }
             if (object.type() == ObjectType.STAIRS) {
                 Destination to = object.destination();
+                if (object.wall() != null && map.edge(object.x(), object.y(), object.wall()) != EdgeType.WALL) {
+                    stuck.add("The stairs" + where + " are on the " + object.wall().displayName().toLowerCase()
+                            + " side, but there's no wall there.");
+                }
                 if (!to.isSet()) {
                     stuck.add("The stairs" + where + " don't lead anywhere yet.");
                 } else if (floors != null && !floors.containsKey(to.map())) {
