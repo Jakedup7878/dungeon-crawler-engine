@@ -1,6 +1,8 @@
 package crawler.game;
 
 import crawler.battle.Battle;
+import crawler.battle.BattleEvent;
+import crawler.battle.Effects;
 import crawler.battle.Fighter;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
@@ -8,6 +10,11 @@ import crawler.core.EdgeType;
 import crawler.core.EnemyType;
 import crawler.core.Exploration;
 import crawler.core.GameContent;
+import crawler.core.Inventory;
+import crawler.core.Item;
+import crawler.core.ItemKind;
+import crawler.core.ItemStack;
+import crawler.core.ItemTarget;
 import crawler.core.MapObject;
 import crawler.core.MoveResult;
 import crawler.core.MovementSystem;
@@ -46,6 +53,7 @@ public final class Game {
     private final Set<Integer> openedChests = new HashSet<>();
     private final Set<Integer> triggeredEvents = new HashSet<>();
     private final List<Fighter> heroes = new ArrayList<>();
+    private final Inventory inventory = new Inventory();
     private Battle battle;
     private boolean gameOver;
     private int gold;
@@ -67,6 +75,7 @@ public final class Game {
         this.movement = new MovementSystem(map, party);
         this.exploration = new Exploration(map);
         this.gold = content.settings().startingGold();
+        give(content.settings().startingItems());
         replaceParty(content.startingParty());
         exploration.visit(party.x(), party.y());
         movement.addListener(this::onMovement);
@@ -118,8 +127,13 @@ public final class Game {
             case CHEST -> {
                 if (openedChests.add(index(object))) {
                     log.add("You open the " + object.displayName().toLowerCase() + ".");
+                    List<String> found = new ArrayList<>();
+                    if (!object.text().isEmpty()) {
+                        found.add(object.text());
+                    }
+                    found.addAll(give(object.items()));
                     messages.add(new GameMessage(object.displayName(),
-                            object.text().isEmpty() ? "It's empty." : "Inside you find:\n" + object.text(), object));
+                            found.isEmpty() ? "It's empty." : "Inside you find:\n" + String.join("\n", found), object));
                 } else {
                     messages.add(new GameMessage(object.displayName(), "It's empty now.", object));
                 }
@@ -204,7 +218,7 @@ public final class Game {
             }
             fighters.add(Fighter.enemy(type, name));
         }
-        battle = new Battle(heroes, fighters, canFlee, random);
+        battle = new Battle(heroes, fighters, canFlee, random, inventory);
         log.add(fighters.size() == 1 ? fighters.get(0).name() + " attacks!" : "Monsters attack!");
     }
 
@@ -218,6 +232,7 @@ public final class Game {
         if (battle == null || battle.outcome() == Battle.Outcome.ONGOING) {
             return;
         }
+        gold += battle.goldFromItems();
         switch (battle.outcome()) {
             case VICTORY -> {
                 gold += battle.goldWon();
@@ -252,8 +267,113 @@ public final class Game {
         }
         heroes.clear();
         for (PartyMember member : members) {
-            heroes.add(Fighter.hero(member, content.classOf(member)));
+            Fighter hero = Fighter.hero(member, content.classOf(member));
+            for (String id : member.equipment()) {
+                Item item = content.item(id);
+                if (item != null && hero.canEquip(item)) {
+                    hero.equip(item);
+                }
+            }
+            hero.restore();
+            heroes.add(hero);
         }
+    }
+
+    // ------------------------------------------------------------ items
+
+    /** What the party carries. */
+    public Inventory inventory() {
+        return inventory;
+    }
+
+    /** Adds items to what the party carries; returns a line for each, such as "Potion x2". */
+    private List<String> give(List<ItemStack> stacks) {
+        List<String> lines = new ArrayList<>();
+        for (ItemStack stack : stacks) {
+            Item item = content.item(stack.id());
+            if (item != null) {
+                int kept = inventory.add(item, stack.count());
+                String line = item.displayName() + (stack.count() > 1 ? " x" + stack.count() : "");
+                lines.add(kept < stack.count() ? line + " (you can't carry them all)" : line);
+            }
+        }
+        return lines;
+    }
+
+    /** Puts an item from the inventory on a party member; what they wore goes back. False if they can't. */
+    public boolean equip(Fighter hero, Item item) {
+        Item worn = hero.equipped(item.kind());
+        if (battle != null || !hero.canEquip(item)
+                || (worn != null && !worn.id().equals(item.id()) && inventory.count(worn) >= ItemStack.MAX)
+                || !inventory.remove(item)) {
+            return false;
+        }
+        hero.equip(item);
+        if (worn != null) {
+            inventory.add(worn, 1);
+        }
+        return true;
+    }
+
+    /** Takes off what a party member wears in a slot. False if there's nothing, or no room for it. */
+    public boolean unequip(Fighter hero, ItemKind slot) {
+        Item worn = hero.equipped(slot);
+        if (battle != null || worn == null || inventory.add(worn, 1) == 0) {
+            return false;
+        }
+        hero.unequip(slot);
+        return true;
+    }
+
+    /**
+     * Uses an item outside battle.
+     *
+     * @param target the party member it's for (or, for items that act on their user, who uses it);
+     *               ignored if it's for the whole party
+     * @return what happened, to show the player
+     */
+    public String useItem(Item item, Fighter target) {
+        if (battle != null || gameOver || inventory.count(item) == 0) {
+            return "You can't use that now.";
+        }
+        if (!item.usable()) {
+            return "There's no way to use that.";
+        }
+        if (item.target().battleOnly()) {
+            return "That can only be used in battle.";
+        }
+        boolean party = item.target() == ItemTarget.PARTY;
+        if (!party && target.alive() == (item.target() == ItemTarget.FALLEN)) {
+            return "It would have no effect.";
+        }
+        // Whoever is first in line and able uses it, unless it's for its user.
+        Fighter user = item.target() == ItemTarget.SELF ? target
+                : heroes.stream().filter(Fighter::alive).findFirst().orElse(heroes.get(0));
+        List<BattleEvent> events = new ArrayList<>();
+        Effects effects = new Effects(item, user, party ? null : target, heroes, List.of(), random, events, 0, 0).run("use");
+        gold += effects.gold();
+        if (!effects.changed() && events.isEmpty()) {
+            return "It would have no effect.";
+        }
+        if (item.consumed() && effects.changed()) { // one that only says something isn't used up
+            inventory.remove(item);
+        }
+        List<String> lines = new ArrayList<>();
+        for (BattleEvent event : events) {
+            if (event instanceof BattleEvent.Heal h) {
+                lines.add(h.target().name() + " recovers " + h.amount() + (h.mana() ? " MP." : " HP."));
+            } else if (event instanceof BattleEvent.Hurt h) {
+                lines.add(h.target().name() + " loses " + h.amount() + " HP.");
+            } else if (event instanceof BattleEvent.Revived r) {
+                lines.add(r.target().name() + " is back on their feet.");
+            } else if (event instanceof BattleEvent.Note n) {
+                lines.add(n.text());
+            }
+        }
+        if (effects.gold() > 0) {
+            lines.add("You gain " + effects.gold() + " gold.");
+        }
+        return String.join(" ", lines);
     }
 
     public int gold() {

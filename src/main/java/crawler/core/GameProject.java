@@ -84,6 +84,7 @@ public final class GameProject {
         boolean partyCreation = d.partyCreation();
         int partySize = d.partySize();
         int startingGold = d.startingGold();
+        List<ItemStack> startingItems = d.startingItems();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).strip();
             if (line.isEmpty() || line.startsWith(";")) {
@@ -107,6 +108,13 @@ public final class GameProject {
                 case "party_creation" -> partyCreation = yesNo(value, where + "party_creation should be yes or no");
                 case "party_size" -> partySize = number(value, 1, ProjectSettings.MAX_PARTY, where + "party_size");
                 case "starting_gold" -> startingGold = number(value, 0, ProjectSettings.MAX_GOLD, where + "starting_gold");
+                case "starting_items" -> {
+                    try {
+                        startingItems = ItemStack.parse(value);
+                    } catch (IllegalArgumentException e) {
+                        throw new IOException(where + e.getMessage());
+                    }
+                }
                 default -> throw new IOException(where + "unknown setting '" + key + "'");
             }
         }
@@ -114,7 +122,7 @@ public final class GameProject {
             throw new IOException(FILE_NAME + " doesn't say which map to start on (start = maps/b1f.txt)");
         }
         return new GameProject(root, name, start, new ProjectSettings(npc, chest, chestOpen,
-                battleMusic, victoryMusic, partyCreation, partySize, startingGold));
+                battleMusic, victoryMusic, partyCreation, partySize, startingGold, startingItems));
     }
 
     private static boolean yesNo(String value, String error) throws IOException {
@@ -160,6 +168,7 @@ public final class GameProject {
         setting(text, "party_creation", s.partyCreation() ? "yes" : "no");
         setting(text, "party_size", s.partySize());
         setting(text, "starting_gold", s.startingGold());
+        setting(text, "starting_items", s.startingItems().isEmpty() ? null : ItemStack.text(s.startingItems()));
         Files.writeString(root.resolve(FILE_NAME), text.toString(), StandardCharsets.UTF_8);
     }
 

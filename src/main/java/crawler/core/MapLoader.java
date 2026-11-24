@@ -49,7 +49,8 @@ import java.util.regex.Pattern;
  *   <li>{@code [textures]} with {@code wall}, {@code door}, {@code floor}, {@code ceiling} = image path.</li>
  *   <li>{@code [event x,y]}: {@code name}, {@code text}, {@code once} (yes/no), {@code sprite},
  *       {@code battle} (enemy ids to fight there).</li>
- *   <li>{@code [chest x,y]}: {@code name}, {@code contents}, {@code sprite}, {@code opened}.</li>
+ *   <li>{@code [chest x,y]}: {@code name}, {@code contents}, {@code items} (such as
+ *       {@code potion x2, iron-sword}), {@code sprite}, {@code opened}.</li>
  *   <li>{@code [npc x,y]}: {@code name}, {@code text}, {@code sprite}.</li>
  * </ul>
  * Image paths are relative to the map file. In text, {@code \n} starts a new line.
@@ -62,7 +63,7 @@ public final class MapLoader {
     private static final Pattern SECTION = Pattern.compile("\\[\\s*(\\w+)(?:\\s+(\\d+)\\s*,\\s*(\\d+))?\\s*]");
     private static final Map<ObjectType, Set<String>> OBJECT_KEYS = Map.of(
             ObjectType.EVENT, Set.of("name", "text", "once", "sprite", "battle"),
-            ObjectType.CHEST, Set.of("name", "contents", "sprite", "opened"),
+            ObjectType.CHEST, Set.of("name", "contents", "items", "sprite", "opened"),
             ObjectType.NPC, Set.of("name", "text", "sprite"));
 
     private MapLoader() {
@@ -324,9 +325,15 @@ public final class MapLoader {
             }
         }
         String text = type == ObjectType.CHEST ? v.get("contents") : v.get("text");
+        List<ItemStack> items;
+        try {
+            items = ItemStack.parse(v.get("items"));
+        } catch (IllegalArgumentException e) {
+            throw error(source, section.keyLines().get("items"), e.getMessage());
+        }
         map.putObject(new MapObject(type, x, y, v.getOrDefault("name", ""), text,
                 SpriteRef.parse(v.get("sprite")), SpriteRef.parse(v.get("opened")), once,
-                Encounters.parseIds(v.get("battle"))));
+                Encounters.parseIds(v.get("battle")), items));
     }
 
     /** {@code \n} is a line break and {@code \\} a backslash. */

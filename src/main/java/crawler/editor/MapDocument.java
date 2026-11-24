@@ -33,6 +33,8 @@ final class MapDocument {
     private MapCheck check;
     /** Ids of the project's enemies, for checking encounters; null when there is no project. */
     private Set<String> knownEnemies;
+    /** The same for items. */
+    private Set<String> knownItems;
 
     /** @param assets where the map's images are looked up, for the checks */
     MapDocument(DungeonMap map, Path file, AssetSource assets) {
@@ -67,7 +69,7 @@ final class MapDocument {
 
     MapCheck check() {
         if (check == null) {
-            check = MapCheck.of(map, assets, knownEnemies);
+            check = MapCheck.of(map, assets, knownEnemies, knownItems);
         }
         return check;
     }
@@ -151,6 +153,12 @@ final class MapDocument {
     /** The project's enemy ids (null for none known), so the checks can spot typos in encounters. */
     void setKnownEnemies(Set<String> ids) {
         knownEnemies = ids == null ? null : Set.copyOf(ids);
+        changed();
+    }
+
+    /** The project's item ids (null for none known), so the checks can spot typos in chests. */
+    void setKnownItems(Set<String> ids) {
+        knownItems = ids == null ? null : Set.copyOf(ids);
         changed();
     }
 

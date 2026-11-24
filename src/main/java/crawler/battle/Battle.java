@@ -1,5 +1,9 @@
 package crawler.battle;
 
+import crawler.core.Inventory;
+import crawler.core.Item;
+import crawler.core.ItemTarget;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,10 +24,13 @@ public final class Battle {
     static final int MISS_CHANCE = 5;
 
     /** What a party member does this round. */
-    public enum Command { ATTACK, DEFEND, FLEE }
+    public enum Command { ATTACK, DEFEND, ITEM, FLEE }
 
-    /** A party member's order: the command, and for attacks, who to hit. */
-    public record Order(Fighter actor, Command command, Fighter target) {
+    /** A party member's order: the command, who it's aimed at (or null), and for ITEM, which item. */
+    public record Order(Fighter actor, Command command, Fighter target, Item item) {
+        public Order(Fighter actor, Command command, Fighter target) {
+            this(actor, command, target, null);
+        }
     }
 
     public enum Outcome { ONGOING, VICTORY, DEFEAT, FLED }
@@ -32,15 +39,22 @@ public final class Battle {
     private final List<Fighter> enemies;
     private final boolean canFlee;
     private final Random random;
+    private final Inventory inventory;
     private Outcome outcome = Outcome.ONGOING;
     private int round;
     private int goldWon;
+    private int goldFromItems;
 
     /**
      * @param party   the party members, in marching order (fallen members stay in the list)
      * @param canFlee false for battles that can't be run from
      */
     public Battle(List<Fighter> party, List<Fighter> enemies, boolean canFlee, Random random) {
+        this(party, enemies, canFlee, random, new Inventory());
+    }
+
+    /** @param inventory what the party can use; used-up items are taken from it */
+    public Battle(List<Fighter> party, List<Fighter> enemies, boolean canFlee, Random random, Inventory inventory) {
         if (enemies.isEmpty()) {
             throw new IllegalArgumentException("A battle needs at least one enemy");
         }
@@ -48,6 +62,7 @@ public final class Battle {
         this.enemies = List.copyOf(enemies);
         this.canFlee = canFlee;
         this.random = random;
+        this.inventory = inventory;
     }
 
     public List<Fighter> party() {
@@ -76,6 +91,11 @@ public final class Battle {
         return goldWon;
     }
 
+    /** Gold that items' scripts gave the party, however the battle ended. */
+    public int goldFromItems() {
+        return goldFromItems;
+    }
+
     public List<Fighter> livingParty() {
         return party.stream().filter(Fighter::alive).toList();
     }
@@ -100,13 +120,20 @@ public final class Battle {
             orderOf.put(order.actor(), order);
         }
 
+        if (round == 1) {
+            triggerAll("battle", events);
+        }
+        triggerAll("round", events);
+        checkForEnd(events);
+
         // Defending lasts the whole round, so it happens before anyone acts.
         for (Fighter f : party) {
             f.setDefending(false);
         }
         for (Fighter f : livingParty()) {
             Order order = orderOf.get(f);
-            if (order != null && order.command() == Command.DEFEND) {
+            if (order != null && order.command() == Command.DEFEND
+                    && !f.stunned() && outcome == Outcome.ONGOING) {
                 f.setDefending(true);
                 events.add(new BattleEvent.Defend(f));
             }
@@ -125,6 +152,10 @@ public final class Battle {
             if (outcome != Outcome.ONGOING || !actor.alive()) {
                 continue;
             }
+            if (actor.loseTurn()) {
+                events.add(new BattleEvent.Note(actor.name() + " is stunned and can't move!"));
+                continue;
+            }
             if (actor.isEnemy()) {
                 List<Fighter> targets = livingParty();
                 attack(actor, targets.get(random.nextInt(targets.size())), events);
@@ -141,6 +172,7 @@ public final class Battle {
                         attack(actor, target, events);
                     }
                     case DEFEND -> { }
+                    case ITEM -> useItem(order, events);
                     case FLEE -> flee(actor, events);
                 }
             }
@@ -148,7 +180,77 @@ public final class Battle {
                 checkForEnd(events);
             }
         }
+        if (outcome == Outcome.ONGOING) {
+            endOfRound(events);
+        }
+        if (outcome != Outcome.ONGOING) {
+            party.forEach(Fighter::clearConditions);
+        }
         return events;
+    }
+
+    /** Poison does its work, and boosts wear down. */
+    private void endOfRound(List<BattleEvent> events) {
+        List<Fighter> everyone = new ArrayList<>(party);
+        everyone.addAll(enemies);
+        for (Fighter f : everyone) {
+            int damage = f.tickPoison();
+            if (damage > 0) {
+                events.add(new BattleEvent.Hurt(f, damage, "poison", !f.alive()));
+            }
+            f.tickBoosts();
+        }
+        checkForEnd(events);
+    }
+
+    /** Runs a script block of everything the party wears. */
+    private void triggerAll(String trigger, List<BattleEvent> events) {
+        for (Fighter hero : livingParty()) {
+            for (Item item : hero.equipment()) {
+                if (hero.alive()) {
+                    trigger(trigger, item, hero, hero, 0, events);
+                }
+            }
+        }
+    }
+
+    private Effects trigger(String trigger, Item item, Fighter user, Fighter target, int damage, List<BattleEvent> events) {
+        Effects effects = new Effects(item, user, target, party, enemies, random, events, damage, round).run(trigger);
+        goldFromItems += effects.gold();
+        return effects;
+    }
+
+    private void useItem(Order order, List<BattleEvent> events) {
+        Item item = order.item();
+        Fighter actor = order.actor();
+        if (item == null || !item.usable() || inventory.count(item) == 0) {
+            events.add(new BattleEvent.Note(actor.name() + " has nothing to use!"));
+            return;
+        }
+        Fighter target = switch (item.target()) {
+            case SELF -> actor;
+            case ALLY, FALLEN -> order.target();
+            case ENEMY -> {
+                Fighter chosen = order.target();
+                List<Fighter> living = livingEnemies();
+                yield chosen != null && chosen.isEnemy() && chosen.alive() ? chosen : living.get(random.nextInt(living.size()));
+            }
+            case PARTY, ENEMIES -> null;
+        };
+        events.add(new BattleEvent.ItemUsed(actor, item, target));
+        if (item.target().picksAlly()
+                && (target == null || target.isEnemy() || target.alive() != (item.target() == ItemTarget.ALLY))) {
+            events.add(new BattleEvent.Note("It has no effect."));
+            return; // and it isn't used up
+        }
+        int before = events.size();
+        Effects effects = trigger("use", item, actor, target, 0, events);
+        if (item.consumed()) {
+            inventory.remove(item);
+        }
+        if (!effects.changed() && events.size() == before) {
+            events.add(new BattleEvent.Note("Nothing happens."));
+        }
     }
 
     private void attack(Fighter attacker, Fighter target, List<BattleEvent> events) {
@@ -159,6 +261,16 @@ public final class Battle {
         int damage = damage(attacker, target, 85 + random.nextInt(31));
         target.takeDamage(damage);
         events.add(new BattleEvent.Attack(attacker, target, damage, false, !target.alive()));
+        for (Item item : attacker.equipment()) {
+            if (attacker.alive()) {
+                trigger("hit", item, attacker, target, damage, events);
+            }
+        }
+        for (Item item : target.equipment()) {
+            if (target.alive()) {
+                trigger("hurt", item, target, attacker, damage, events);
+            }
+        }
     }
 
     /**
@@ -191,7 +303,10 @@ public final class Battle {
     }
 
     private void checkForEnd(List<BattleEvent> events) {
-        if (livingEnemies().isEmpty()) {
+        if (livingParty().isEmpty()) {
+            outcome = Outcome.DEFEAT;
+            events.add(new BattleEvent.Defeat());
+        } else if (livingEnemies().isEmpty()) {
             outcome = Outcome.VICTORY;
             int exp = enemies.stream().mapToInt(Fighter::expReward).sum();
             goldWon = enemies.stream().mapToInt(Fighter::goldReward).sum();
@@ -204,9 +319,6 @@ public final class Battle {
                 }
             }
             events.add(new BattleEvent.Victory(expEach, goldWon, levelUps));
-        } else if (livingParty().isEmpty()) {
-            outcome = Outcome.DEFEAT;
-            events.add(new BattleEvent.Defeat());
         }
     }
 }

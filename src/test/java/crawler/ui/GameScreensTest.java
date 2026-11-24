@@ -134,4 +134,57 @@ class GameScreensTest {
         assertFalse(game.isGameOver());
         assertEquals(3, game.heroes().size());
     }
+
+    @Test
+    void itemsAreUsedAndEquippedFromTheInventory() throws IOException {
+        start(1, false);
+        var potion = game.content().item("potion");
+        key(KeyEvent.VK_I);
+        paint();
+        key(KeyEvent.VK_ENTER);           // the potion: choose who
+        paint();
+        key(KeyEvent.VK_ENTER);           // nobody is hurt, so nothing is used
+        assertEquals(3, game.inventory().count(potion));
+        key(KeyEvent.VK_ESCAPE);
+        key(KeyEvent.VK_TAB);             // equipment
+        paint();
+        key(KeyEvent.VK_ENTER);           // take off the first member's sword
+        var sword = game.content().item("iron-sword");
+        assertEquals(1, game.inventory().count(sword));
+        key(KeyEvent.VK_TAB);
+        key(KeyEvent.VK_UP);              // the sword, last in the list
+        key(KeyEvent.VK_ENTER);
+        paint();
+        key(KeyEvent.VK_ENTER);           // back on
+        assertEquals(sword, game.heroes().get(0).equipped(crawler.core.ItemKind.WEAPON));
+        key(KeyEvent.VK_ESCAPE);
+        key(KeyEvent.VK_W);
+        assertTrue(game.steps() > 0, "walking again");
+    }
+
+    @Test
+    void itemsCanBeUsedInBattle() throws IOException {
+        start(5, false);
+        game.startBattle(List.of(game.content().enemy("rat-king")), true);
+        game.inventory().add(game.content().item("fire-flask"), 1);
+        run(0.1);
+        key(KeyEvent.VK_ENTER);           // past the introduction
+        key(KeyEvent.VK_DOWN);
+        key(KeyEvent.VK_DOWN);
+        key(KeyEvent.VK_ENTER);           // Item
+        paint();
+        key(KeyEvent.VK_ENTER);           // potion: on whom
+        paint();
+        key(KeyEvent.VK_ESCAPE);          // no: back to the list
+        key(KeyEvent.VK_UP);              // the flask, last
+        paint();
+        key(KeyEvent.VK_ENTER);
+        key(KeyEvent.VK_ENTER);           // the others attack
+        key(KeyEvent.VK_ENTER);
+        assertEquals(0, game.inventory().count(game.content().item("fire-flask")));
+        for (int i = 0; i < 30; i++) {
+            run(0.4);
+            paint();
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package crawler.core;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -14,10 +15,12 @@ import java.util.Set;
  * @param partyCreation   whether players may create their own party when a new game starts
  * @param partySize       how many members a party can have (1 to 6)
  * @param startingGold    gold the party starts with
+ * @param startingItems   items the party starts with
  */
 public record ProjectSettings(SpriteRef npcSprite, SpriteRef chestSprite, SpriteRef chestOpenSprite,
                               String battleMusic, String victoryMusic,
-                              boolean partyCreation, int partySize, int startingGold) {
+                              boolean partyCreation, int partySize, int startingGold,
+                              List<ItemStack> startingItems) {
     public static final int MAX_PARTY = 6;
     public static final int MAX_GOLD = 999_999;
     public static final ProjectSettings DEFAULT = new ProjectSettings(null, null, null, null, null, true, 4, 0);
@@ -25,8 +28,16 @@ public record ProjectSettings(SpriteRef npcSprite, SpriteRef chestSprite, Sprite
     public ProjectSettings {
         battleMusic = battleMusic == null || battleMusic.isBlank() ? null : battleMusic.strip();
         victoryMusic = victoryMusic == null || victoryMusic.isBlank() ? null : victoryMusic.strip();
+        startingItems = startingItems == null ? List.of() : List.copyOf(startingItems);
         partySize = Math.max(1, Math.min(MAX_PARTY, partySize));
         startingGold = Math.max(0, Math.min(MAX_GOLD, startingGold));
+    }
+
+    /** Settings with no starting items. */
+    public ProjectSettings(SpriteRef npcSprite, SpriteRef chestSprite, SpriteRef chestOpenSprite,
+                           String battleMusic, String victoryMusic, boolean partyCreation, int partySize, int startingGold) {
+        this(npcSprite, chestSprite, chestOpenSprite, battleMusic, victoryMusic, partyCreation, partySize, startingGold,
+                List.of());
     }
 
     /** Every file these settings refer to. */

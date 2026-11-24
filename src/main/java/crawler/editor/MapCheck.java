@@ -3,6 +3,7 @@ package crawler.editor;
 import crawler.core.Direction;
 import crawler.core.DungeonMap;
 import crawler.core.EdgeType;
+import crawler.core.ItemStack;
 import crawler.core.MapObject;
 import crawler.core.ObjectType;
 import crawler.core.Reachability;
@@ -25,14 +26,19 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
     private static final int MAX_LISTED = 3;
 
     static MapCheck of(DungeonMap map, AssetSource assets) {
-        return of(map, assets, null);
+        return of(map, assets, null, null);
+    }
+
+    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies) {
+        return of(map, assets, knownEnemies, null);
     }
 
     /**
+     * @param knownItems   ids of the project's items, to check chests the same way; null to skip that
      * @param knownEnemies ids of the project's enemies, to point out encounters and event battles
      *                     naming enemies that don't exist; null to skip that check
      */
-    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies) {
+    static MapCheck of(DungeonMap map, AssetSource assets, Set<String> knownEnemies, Set<String> knownItems) {
         int width = map.width();
         int height = map.height();
         List<String> problems = new ArrayList<>();
@@ -110,6 +116,18 @@ record MapCheck(int floorCells, int reachableCells, int doors, int events, int c
                 }
             }
             addSome(problems, unknown, "unknown enemies");
+        }
+        if (knownItems != null) {
+            List<String> unknown = new ArrayList<>();
+            for (MapObject object : map.objects()) {
+                for (ItemStack stack : object.items()) {
+                    if (!knownItems.contains(stack.id())) {
+                        unknown.add("The chest at " + object.x() + ", " + object.y() + " holds an item that doesn't exist: "
+                                + stack.id() + " (see Project > Items).");
+                    }
+                }
+            }
+            addSome(problems, unknown, "unknown items");
         }
         if (map.encounters().rate() > 0 && map.encounters().enemies().isEmpty()) {
             problems.add("Random battles are switched on, but no enemies are chosen (Edit > Map Settings).");

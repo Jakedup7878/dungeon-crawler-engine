@@ -4,3 +4,4 @@ start = maps/b1f.txt
 party_creation = yes
 party_size = 4
 starting_gold = 20
+starting_items = potion x3, antidote

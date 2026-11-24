@@ -1,17 +1,20 @@
 package crawler.core;
 
+import crawler.script.Script;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 
 /**
  * Game-wide data kept in the project folder next to project.txt: the ready-made party
  * ({@code party.txt}), the classes ({@code classes.txt}), the kinds of enemy
- * ({@code enemies.txt}) and the attack animations ({@code animations.txt}).
+ * ({@code enemies.txt}), the attack animations ({@code animations.txt}) and the items ({@code items.txt}).
  * A missing file just means there are none yet.
  */
 public final class GameData {
@@ -19,6 +22,7 @@ public final class GameData {
     public static final String CLASSES_FILE = "classes.txt";
     public static final String ENEMIES_FILE = "enemies.txt";
     public static final String ANIMATIONS_FILE = "animations.txt";
+    public static final String ITEMS_FILE = "items.txt";
     public static final int MAX_PARTY = ProjectSettings.MAX_PARTY;
     private static final int MAX_REWARD = 999_999;
     private static final String PATHS_NOTE = "Image and sound paths are relative to the project folder.";
@@ -36,9 +40,10 @@ public final class GameData {
         List<PartyMember> party = new ArrayList<>();
         for (SectionFile.Section s : sections(files, PARTY_FILE)) {
             s.expect("member", false);
-            s.allow("name", "class", "level", "hp", "mp", "attack", "defense", "speed", "portrait");
+            s.allow("name", "class", "level", "hp", "mp", "attack", "defense", "speed", "portrait", "equipment");
             party.add(new PartyMember(s.text("name"), s.text("class"), s.number("level", 1, 1, 99),
-                    Stats.read(s, PartyMember.DEFAULT_STATS), s.image("portrait")));
+                    Stats.read(s, PartyMember.DEFAULT_STATS), s.image("portrait"),
+                    Encounters.parseIds(s.text("equipment"))));
         }
         if (party.size() > MAX_PARTY) {
             throw new IllegalArgumentException(PARTY_FILE + ": a party has at most " + MAX_PARTY + " members");
@@ -55,7 +60,7 @@ public final class GameData {
                     .field("class", member.characterClass())
                     .field("level", member.level());
             member.stats().write(out);
-            out.field("portrait", member.portrait());
+            out.field("portrait", member.portrait()).field("equipment", String.join(", ", member.equipment()));
         }
         out.save(projectRoot.resolve(PARTY_FILE));
     }
@@ -73,12 +78,12 @@ public final class GameData {
             s.expect("class", true);
             s.allow("name", "hp", "mp", "attack", "defense", "speed",
                     "growth_hp", "growth_mp", "growth_attack", "growth_defense", "growth_speed",
-                    "animation", "portrait");
+                    "animation", "portrait", "equipment");
             checkId(s, ids, "classes");
             classes.add(new CharacterClass(s.id(), s.text("name"),
                     Stats.read(s, "", CharacterClass.DEFAULT_BASE, 1),
                     Stats.read(s, "growth_", CharacterClass.DEFAULT_GROWTH, 0),
-                    s.text("animation"), s.image("portrait")));
+                    s.text("animation"), s.image("portrait"), Encounters.parseIds(s.text("equipment"))));
         }
         return classes;
     }
@@ -91,7 +96,8 @@ public final class GameData {
             out.section("class", c.id()).field("name", c.name());
             c.base().write(out);
             c.growth().write(out, "growth_");
-            out.field("animation", c.attackAnimation()).field("portrait", c.portrait());
+            out.field("animation", c.attackAnimation()).field("portrait", c.portrait())
+                    .field("equipment", String.join(", ", c.equipment()));
         }
         out.save(projectRoot.resolve(CLASSES_FILE));
     }
@@ -157,6 +163,72 @@ public final class GameData {
                     .field("image", a.image()).field("sound", a.sound()).field("size", a.size());
         }
         out.save(projectRoot.resolve(ANIMATIONS_FILE));
+    }
+
+    // ------------------------------------------------------------ items
+
+    public static List<Item> loadItems(Path projectRoot) throws IOException {
+        return loadItems(ProjectFiles.folder(projectRoot));
+    }
+
+    public static List<Item> loadItems(ProjectFiles files) throws IOException {
+        List<Item> items = new ArrayList<>();
+        Set<String> ids = new HashSet<>();
+        for (SectionFile.Section s : sections(files, ITEMS_FILE)) {
+            s.expect("item", true);
+            s.allow("name", "kind", "description", "hp", "mp", "attack", "defense", "speed", "target", "consumed",
+                    "classes", "icon", "animation", "script");
+            checkId(s, ids, "items");
+            ItemKind kind = s.text("kind").isBlank() ? ItemKind.CONSUMABLE : ItemKind.of(s.text("kind"));
+            if (kind == null) {
+                throw s.error("kind", "unknown kind '" + s.text("kind")
+                        + "' (use consumable, weapon, shield, head, body, accessory or key)");
+            }
+            ItemTarget target = s.text("target").isBlank() ? ItemTarget.ALLY : ItemTarget.of(s.text("target"));
+            if (target == null) {
+                throw s.error("target", "unknown target '" + s.text("target")
+                        + "' (use ally, fallen, party, enemy, enemies or self)");
+            }
+            boolean consumed = switch (s.text("consumed").toLowerCase(Locale.ROOT)) {
+                case "" -> kind == ItemKind.CONSUMABLE;
+                case "yes", "true" -> true;
+                case "no", "false" -> false;
+                default -> throw s.error("consumed", "consumed should be yes or no");
+            };
+            int max = Item.MAX_BONUS;
+            Stats bonus = new Stats(s.number("hp", 0, -max, max), s.number("mp", 0, -max, max),
+                    s.number("attack", 0, -max, max), s.number("defense", 0, -max, max), s.number("speed", 0, -max, max));
+            Script script;
+            try {
+                script = Script.parse(s.text("script").strip());
+            } catch (IllegalArgumentException e) {
+                throw s.error("script", "the script of '" + s.id() + "', " + e.getMessage());
+            }
+            items.add(new Item(s.id(), s.text("name"), kind, s.text("description"), bonus, target, consumed,
+                    Encounters.parseIds(s.text("classes")), SpriteRef.parse(s.image("icon")), s.text("animation"),
+                    s.text("script"), script));
+        }
+        return items;
+    }
+
+    public static void saveItems(Path projectRoot, List<Item> items) throws IOException {
+        SectionFile.Writer out = new SectionFile.Writer()
+                .comment("The items in the game. hp, mp, attack, defense and speed are bonuses while equipped.\n"
+                        + "script says what the item does; \\n in it starts a new line. " + PATHS_NOTE);
+        for (Item item : items) {
+            out.section("item", item.id()).field("name", item.name()).field("kind", item.kind().key())
+                    .field("description", item.description());
+            Stats b = item.bonus();
+            String[] keys = {"hp", "mp", "attack", "defense", "speed"};
+            int[] values = {b.hp(), b.mp(), b.attack(), b.defense(), b.speed()};
+            for (int i = 0; i < keys.length; i++) {
+                out.field(keys[i], values[i] == 0 ? null : values[i]);
+            }
+            out.field("target", item.target().key()).field("consumed", item.consumed() ? "yes" : "no")
+                    .field("classes", String.join(", ", item.classes())).field("icon", item.icon())
+                    .field("animation", item.animation()).field("script", item.scriptText());
+        }
+        out.save(projectRoot.resolve(ITEMS_FILE));
     }
 
     // ------------------------------------------------------------ helpers

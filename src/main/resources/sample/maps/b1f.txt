@@ -41,7 +41,8 @@ text = The door creaks shut behind you. Somewhere in the dark, something small s
 
 [chest 0,0]
 name = Dusty chest
-contents = A rusty key and 12 gold pieces.
+contents = Under a layer of dust:
+items = ember-blade, fire-flask x2, phoenix-feather
 
 [npc 10,1]
 name = Old man

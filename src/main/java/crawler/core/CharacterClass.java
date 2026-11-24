@@ -10,8 +10,10 @@ import java.util.List;
  * @param growth          added at each level up
  * @param attackAnimation id of an {@link AttackAnimation}, or null for the built-in slash
  * @param portrait        picture for members of this class who have none of their own, or null
+ * @param equipment       ids of the items a newly created member starts out wearing
  */
-public record CharacterClass(String id, String name, Stats base, Stats growth, String attackAnimation, String portrait) {
+public record CharacterClass(String id, String name, Stats base, Stats growth, String attackAnimation,
+                             String portrait, List<String> equipment) {
     public static final Stats DEFAULT_BASE = new Stats(26, 0, 7, 5, 5);
     public static final Stats DEFAULT_GROWTH = new Stats(6, 2, 2, 2, 1);
 
@@ -20,6 +22,12 @@ public record CharacterClass(String id, String name, Stats base, Stats growth, S
         name = name == null ? "" : name.strip();
         attackAnimation = attackAnimation == null || attackAnimation.isBlank() ? null : attackAnimation.strip();
         portrait = portrait == null || portrait.isBlank() ? null : portrait.strip();
+        equipment = equipment == null ? List.of() : List.copyOf(equipment);
+    }
+
+    /** A class that starts with nothing special. */
+    public CharacterClass(String id, String name, Stats base, Stats growth, String attackAnimation, String portrait) {
+        this(id, name, base, growth, attackAnimation, portrait, List.of());
     }
 
     public static CharacterClass create(String id, String name) {
@@ -41,6 +49,6 @@ public record CharacterClass(String id, String name, Stats base, Stats growth, S
     }
 
     public CharacterClass withPortrait(String newPortrait) {
-        return new CharacterClass(id, name, base, growth, attackAnimation, newPortrait);
+        return new CharacterClass(id, name, base, growth, attackAnimation, newPortrait, equipment);
     }
 }

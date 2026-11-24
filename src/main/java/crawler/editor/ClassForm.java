@@ -2,6 +2,7 @@ package crawler.editor;
 
 import crawler.core.AttackAnimation;
 import crawler.core.CharacterClass;
+import crawler.core.Encounters;
 import crawler.core.EnemyType;
 
 import javax.swing.JComponent;
@@ -18,12 +19,14 @@ final class ClassForm implements RosterDialog.Form<CharacterClass> {
     private final StatFields growth = new StatFields(true);
     private final AnimationChooser animation;
     private final ImagePicker portrait;
+    private final JTextField equipment = new JTextField(22);
     private final JComponent component;
 
     ClassForm(AssetStore assets, List<AttackAnimation> animations) {
         id.setToolTipText("Party members refer to their class by name or id. Leave empty to make one from the name.");
         animation = new AnimationChooser(animations);
         portrait = new ImagePicker(assets, null, null, "No portrait");
+        equipment.setToolTipText("Ids of the items a new member starts out wearing, comma separated.");
         List<JComponent> rows = new ArrayList<>(List.of(
                 new JLabel("Name"), name,
                 new JLabel("Id"), id,
@@ -33,6 +36,7 @@ final class ClassForm implements RosterDialog.Form<CharacterClass> {
         rows.addAll(List.of(growth.rows()));
         rows.addAll(List.of(
                 new JLabel("Attack animation"), animation,
+                new JLabel("Equipment"), equipment,
                 new JLabel("Portrait"), portrait,
                 new JLabel(), ObjectDialog.hint("Members of this class without a portrait of their own use this one.")));
         component = MapDialogs.form(rows.toArray(new JComponent[0]));
@@ -51,6 +55,7 @@ final class ClassForm implements RosterDialog.Form<CharacterClass> {
         growth.show(c.growth());
         animation.setAnimation(c.attackAnimation());
         portrait.set(c.portrait());
+        equipment.setText(String.join(", ", c.equipment()));
     }
 
     @Override
@@ -60,7 +65,7 @@ final class ClassForm implements RosterDialog.Form<CharacterClass> {
             typedId = EnemyType.idFor(name.getText());
         }
         return new CharacterClass(typedId, name.getText(), base.read(), growth.read(),
-                animation.animation(), portrait.reference());
+                animation.animation(), portrait.reference(), Encounters.parseIds(equipment.getText()));
     }
 
     @Override

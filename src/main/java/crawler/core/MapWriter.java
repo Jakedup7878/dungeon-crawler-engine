@@ -75,6 +75,7 @@ public final class MapWriter {
                 }
                 case CHEST -> {
                     field(out, "contents", object.text());
+                    field(out, "items", ItemStack.text(object.items()));
                     field(out, "sprite", object.sprite());
                     field(out, "opened", object.openSprite());
                 }

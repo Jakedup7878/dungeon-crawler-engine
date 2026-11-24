@@ -14,6 +14,7 @@ growth_mp = 0
 growth_attack = 3
 growth_defense = 2
 growth_speed = 1
+equipment = iron-sword, leather-armor
 
 [class mage]
 name = Mage

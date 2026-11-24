@@ -9,6 +9,7 @@ import crawler.core.EnemyType;
 import crawler.core.GameContent;
 import crawler.core.GameData;
 import crawler.core.GameProject;
+import crawler.core.Item;
 import crawler.core.MapLoader;
 import crawler.core.MapObject;
 import crawler.core.MapWriter;
@@ -234,6 +235,7 @@ final class EditorFrame extends JFrame {
         projectMenu.add(projectAction("Party Members...", this::editParty));
         projectMenu.add(projectAction("Classes...", this::editClasses));
         projectMenu.add(projectAction("Enemies...", this::editEnemies));
+        projectMenu.add(projectAction("Items...", this::editItems));
         projectMenu.add(projectAction("Attack Animations...", this::editAnimations));
         projectMenu.addSeparator();
         projectMenu.add(projectAction("Publish Game...", this::publishGame));
@@ -706,6 +708,28 @@ final class EditorFrame extends JFrame {
         }
     }
 
+    private void editItems() {
+        try {
+            List<Item> items = GameData.loadItems(project.root());
+            List<Item> edited = RosterDialog.show(this, "Items - " + project.name(),
+                    "Potions, weapons, armor and key items. What an item does is up to its script. Chests, classes and "
+                            + "party members refer to items by id. Saved in items.txt when you press OK.",
+                    items, new ItemForm(assets, animations()), Integer.MAX_VALUE);
+            if (edited == null) {
+                return;
+            }
+            Map<String, String> renamed = saveFiles(edited.stream().map(Item::icon)
+                    .filter(Objects::nonNull).map(SpriteRef::image).toList());
+            edited = edited.stream().map(i -> i.withIcon(renamed(i.icon(), renamed))).toList();
+            GameData.saveItems(project.root(), edited);
+            applyProject();
+            status("Saved " + edited.size() + " items in " + GameData.ITEMS_FILE + ".");
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Could not edit the items:\n" + e.getMessage(),
+                    APP, JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void editClasses() {
         try {
             List<CharacterClass> classes = GameData.loadClasses(project.root());
@@ -759,7 +783,8 @@ final class EditorFrame extends JFrame {
             project.setName(choices.name());
             project.setSettings(new ProjectSettings(renamed(s.npcSprite(), renamed), renamed(s.chestSprite(), renamed),
                     renamed(s.chestOpenSprite(), renamed), renamed(s.battleMusic(), renamed),
-                    renamed(s.victoryMusic(), renamed), s.partyCreation(), s.partySize(), s.startingGold()));
+                    renamed(s.victoryMusic(), renamed), s.partyCreation(), s.partySize(), s.startingGold(),
+                    s.startingItems()));
             project.save();
             applyProject();
             documentChanged();
@@ -819,6 +844,7 @@ final class EditorFrame extends JFrame {
         looks.setDefaults(project == null ? ProjectSettings.DEFAULT : project.settings());
         doc.setKnownEnemies(project == null ? null
                 : enemiesOrEmpty().stream().map(EnemyType::id).collect(Collectors.toSet()));
+        doc.setKnownItems(project == null ? null : Set.copyOf(itemIds()));
         side.assetsChanged();
     }
 
@@ -937,7 +963,7 @@ final class EditorFrame extends JFrame {
         MapObject existing = map.object(x, y);
         MapObject edited;
         if (existing != null) {
-            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds());
+            edited = ObjectDialog.show(this, existing, false, assets, looks, enemyIds(), itemIds());
         } else {
             Tool tool = canvas.tool();
             if (!tool.placesObjects()) {
@@ -948,7 +974,7 @@ final class EditorFrame extends JFrame {
                 status(problem);
                 return;
             }
-            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds());
+            edited = ObjectDialog.show(this, MapObject.create(tool.objectType, x, y), true, assets, looks, enemyIds(), itemIds());
         }
         if (edited == null || edited.equals(existing)) {
             return;
@@ -958,6 +984,18 @@ final class EditorFrame extends JFrame {
         doc.endEdit();
         doc.refresh();
         status((existing == null ? "Added " : "Updated ") + "the " + edited.type().lowerName() + " at " + x + ", " + y + ".");
+    }
+
+    private List<String> itemIds() {
+        if (project == null) {
+            return List.of();
+        }
+        try {
+            return GameData.loadItems(project.root()).stream().map(Item::id).toList();
+        } catch (IOException | IllegalArgumentException e) {
+            status("Couldn't read " + GameData.ITEMS_FILE + ": " + e.getMessage());
+            return List.of();
+        }
     }
 
     private List<String> enemyIds() {

@@ -4,6 +4,7 @@ import crawler.core.DungeonMap;
 import crawler.core.Encounters;
 import crawler.core.EnemyType;
 import crawler.core.GameProject;
+import crawler.core.ItemStack;
 import crawler.core.ProjectSettings;
 import crawler.render.ObjectLooks;
 
@@ -115,6 +116,7 @@ final class SettingsDialogs {
         size.setValue(s.partySize());
         JSpinner gold = StatFields.spinner(0, ProjectSettings.MAX_GOLD);
         gold.setValue(s.startingGold());
+        JTextField items = new JTextField(ItemStack.text(s.startingItems()), 28);
         ImagePicker npc = new ImagePicker(assets, null, ObjectLooks.defaultNpc().image(0), "Built-in spinning blue top", true);
         npc.setSprite(s.npcSprite());
         ImagePicker chest = new ImagePicker(assets, null, ObjectLooks.defaultChest(false).image(0), "Built-in chest", true);
@@ -131,6 +133,8 @@ final class SettingsDialogs {
                 new JLabel("Party size"), size,
                 new JLabel(), ObjectDialog.hint("The most members a party can have (1 to 6)."),
                 new JLabel("Starting gold"), gold,
+                new JLabel("Starting items"), items,
+                new JLabel(), ObjectDialog.hint("Item ids and how many, comma separated, such as potion x3."),
                 new JLabel("NPC look"), npc,
                 new JLabel(), ObjectDialog.hint("For every NPC without a picture of its own."),
                 new JLabel("Chest look"), chest,
@@ -143,14 +147,22 @@ final class SettingsDialogs {
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         Dimension preferred = form.getPreferredSize();
         scroll.setPreferredSize(new Dimension(preferred.width + 24, Math.min(preferred.height + 8, 620)));
-        int answer = JOptionPane.showConfirmDialog(parent, scroll, "Project Settings - " + project.name(),
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
-            return null;
+        List<ItemStack> startingItems = null;
+        while (startingItems == null) {
+            int answer = JOptionPane.showConfirmDialog(parent, scroll, "Project Settings - " + project.name(),
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (answer != JOptionPane.OK_OPTION) {
+                return null;
+            }
+            try {
+                startingItems = ItemStack.parse(items.getText());
+            } catch (IllegalArgumentException e) {
+                JOptionPane.showMessageDialog(parent, e.getMessage(), "Project Settings", JOptionPane.WARNING_MESSAGE);
+            }
         }
         String newName = name.getText().strip().isEmpty() ? project.name() : name.getText().strip();
         return new ProjectChoices(newName, new ProjectSettings(npc.sprite(), chest.sprite(), chestOpen.sprite(),
                 battleMusic.reference(), victoryMusic.reference(), creation.isSelected(),
-                StatFields.value(size), StatFields.value(gold)));
+                StatFields.value(size), StatFields.value(gold), startingItems));
     }
 }

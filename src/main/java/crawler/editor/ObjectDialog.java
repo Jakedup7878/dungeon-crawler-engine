@@ -1,6 +1,7 @@
 package crawler.editor;
 
 import crawler.core.Encounters;
+import crawler.core.ItemStack;
 import crawler.core.MapObject;
 import crawler.core.ObjectType;
 import crawler.render.ObjectLooks;
@@ -30,9 +31,10 @@ final class ObjectDialog {
      *
      * @param looks    the game's looks, so the built-in pictures shown are the project's defaults
      * @param enemyIds the enemy ids the project knows, to suggest for event battles (may be empty)
+     * @param itemIds  the same for items, for chests
      */
     static MapObject show(Component parent, MapObject object, boolean isNew, AssetStore assets,
-                          ObjectLooks looks, List<String> enemyIds) {
+                          ObjectLooks looks, List<String> enemyIds, List<String> itemIds) {
         ObjectType type = object.type();
         JTextField name = new JTextField(object.name(), 28);
         JTextArea text = new JTextArea(object.text(), 6, 36);
@@ -40,6 +42,7 @@ final class ObjectDialog {
         text.setWrapStyleWord(true);
         JCheckBox once = new JCheckBox("Only the first time the party steps here", object.once());
         JTextField battle = new JTextField(String.join(", ", object.battle()), 28);
+        JTextField items = new JTextField(ItemStack.text(object.items()), 28);
         ImagePicker sprite = new ImagePicker(assets, null, defaultImage(type, false, looks), switch (type) {
             case EVENT -> "None: the event can't be seen";
             case CHEST -> "The game's chest";
@@ -69,7 +72,11 @@ final class ObjectDialog {
             case CHEST -> MapDialogs.form(
                     new JLabel("Name"), name,
                     new JLabel("Contents"), new JScrollPane(text),
-                    new JLabel(), hint("Shown when the party opens the chest. Empty means an empty chest."),
+                    new JLabel(), hint("Text shown when the party opens the chest. It doesn't have to list the items."),
+                    new JLabel("Items"), items,
+                    new JLabel(), hint("What the party gets: item ids and how many, comma separated, such as "
+                            + (itemIds.isEmpty() ? "potion x2. Make items in Project > Items."
+                            : itemIds.get(0) + " x2" + (itemIds.size() > 1 ? ", " + itemIds.get(1) : "") + ".")),
                     new JLabel("Closed"), sprite,
                     new JLabel("Opened"), opened);
             case NPC -> MapDialogs.form(
@@ -82,14 +89,22 @@ final class ObjectDialog {
                 + "background look best. For an animation, put the frames side by side in one image and set Frames.";
         focusWhenShown(name);
         String title = (isNew ? "New " : "") + type.displayName + " at " + object.x() + ", " + object.y();
-        int answer = JOptionPane.showConfirmDialog(parent, new Object[]{form, hint(note)}, title,
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
-            return null;
+        List<ItemStack> stacks = null;
+        while (stacks == null) {
+            int answer = JOptionPane.showConfirmDialog(parent, new Object[]{form, hint(note)}, title,
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (answer != JOptionPane.OK_OPTION) {
+                return null;
+            }
+            try {
+                stacks = ItemStack.parse(items.getText());
+            } catch (IllegalArgumentException e) { // ask again, with everything as it was typed
+                JOptionPane.showMessageDialog(parent, e.getMessage(), title, JOptionPane.WARNING_MESSAGE);
+            }
         }
         return new MapObject(type, object.x(), object.y(), name.getText(), text.getText(),
                 sprite.sprite(), opened == null ? null : opened.sprite(), once.isSelected(),
-                Encounters.parseIds(battle.getText()));
+                Encounters.parseIds(battle.getText()), stacks);
     }
 
     private static BufferedImage defaultImage(ObjectType type, boolean open, ObjectLooks looks) {

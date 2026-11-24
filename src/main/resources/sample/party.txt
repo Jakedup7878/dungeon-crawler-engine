@@ -9,6 +9,7 @@ mp = 0
 attack = 9
 defense = 7
 speed = 5
+equipment = iron-sword, leather-armor
 
 [member]
 name = Mira

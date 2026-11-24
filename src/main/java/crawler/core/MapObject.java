@@ -16,9 +16,11 @@ import java.util.Objects;
  * @param once       events only: whether it happens only the first time the party steps there
  * @param battle     events only: ids of enemies the party has to fight when it steps there (a fixed
  *                   battle, such as a boss); empty for none
+ * @param items      chests only: what the party gets on opening it
  */
 public record MapObject(ObjectType type, int x, int y, String name, String text,
-                        SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle) {
+                        SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle,
+                        List<ItemStack> items) {
 
     public MapObject {
         Objects.requireNonNull(type, "type");
@@ -26,6 +28,7 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
         text = text == null ? "" : text.replace("\r", "").strip();
         openSprite = type == ObjectType.CHEST ? openSprite : null;
         once = type != ObjectType.EVENT || once;
+        items = type == ObjectType.CHEST && items != null ? List.copyOf(items) : List.of();
         battle = type == ObjectType.EVENT && battle != null ? List.copyOf(battle) : List.of();
     }
 
@@ -33,6 +36,12 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     public MapObject(ObjectType type, int x, int y, String name, String text,
                      SpriteRef sprite, SpriteRef openSprite, boolean once) {
         this(type, x, y, name, text, sprite, openSprite, once, List.of());
+    }
+
+    /** An object without items. */
+    public MapObject(ObjectType type, int x, int y, String name, String text,
+                     SpriteRef sprite, SpriteRef openSprite, boolean once, List<String> battle) {
+        this(type, x, y, name, text, sprite, openSprite, once, battle, List.of());
     }
 
     /** A new object with the default name and nothing else filled in. */
@@ -55,10 +64,10 @@ public record MapObject(ObjectType type, int x, int y, String name, String text,
     }
 
     public MapObject at(int newX, int newY) {
-        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle);
+        return new MapObject(type, newX, newY, name, text, sprite, openSprite, once, battle, items);
     }
 
     public MapObject withSprites(SpriteRef newSprite, SpriteRef newOpenSprite) {
-        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle);
+        return new MapObject(type, x, y, name, text, newSprite, newOpenSprite, once, battle, items);
     }
 }

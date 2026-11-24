@@ -6,6 +6,8 @@ import crawler.battle.BattleEvent;
 import crawler.battle.Fighter;
 import crawler.core.AttackAnimation;
 import crawler.core.GameContent;
+import crawler.core.Item;
+import crawler.core.ItemTarget;
 import crawler.game.Game;
 import crawler.render.ObjectLooks;
 import crawler.render.Sprite;
@@ -24,16 +26,16 @@ import java.util.Map;
 
 /**
  * The battle, drawn over the first-person view. It takes each party member's order (Attack,
- * Defend or Flee), then plays the round's {@link BattleEvent}s one at a time: the attack
+ * Defend, Item or Flee), then plays the round's {@link BattleEvent}s one at a time: the attack
  * animation over whoever is hit, its sound, the damage, and a line of text.
  *
  * <p>HP on screen lags behind the real numbers until each hit is shown, so the bars drop
  * when the animation lands rather than all at once.
  */
 final class BattleScreen {
-    private enum Phase { INTRO, COMMAND, TARGET, PLAYING, OUTCOME }
+    private enum Phase { INTRO, COMMAND, ITEM, TARGET, PLAYING, OUTCOME }
 
-    private static final String[] COMMANDS = {"Attack", "Defend", "Flee"};
+    private static final String[] COMMANDS = {"Attack", "Defend", "Item", "Flee"};
     private static final double INTRO_SECONDS = 1.3;
     private static final double TEXT_SECONDS = 0.9;
     /** How far through an attack animation the hit lands. */
@@ -54,6 +56,9 @@ final class BattleScreen {
     private int heroIndex = -1;
     private int menuIndex;
     private int targetIndex;
+    private int itemIndex;
+    /** The item being aimed, or null for an attack. */
+    private Item aimedItem;
     private final List<Battle.Order> orders = new ArrayList<>();
 
     private final Deque<BattleEvent> queue = new ArrayDeque<>();
@@ -95,7 +100,38 @@ final class BattleScreen {
 
     /** The party member giving orders, to highlight in the party list; null while the round plays. */
     Fighter activeHero() {
-        return (phase == Phase.COMMAND || phase == Phase.TARGET) && heroIndex >= 0 ? battle.party().get(heroIndex) : null;
+        return (phase == Phase.COMMAND || phase == Phase.ITEM || phase == Phase.TARGET) && heroIndex >= 0 ? battle.party().get(heroIndex) : null;
+    }
+
+    /** A party member an item is about to be used on, to mark in the party list; or null. */
+    Fighter targetedHero() {
+        Fighter target = targeted();
+        return target == null || target.isEnemy() ? null : target;
+    }
+
+    private Fighter targeted() {
+        List<Fighter> targets = targets();
+        return phase != Phase.TARGET || targets.isEmpty() ? null : targets.get(Math.min(targetIndex, targets.size() - 1));
+    }
+
+    /** Who the attack or item being aimed could be aimed at. */
+    private List<Fighter> targets() {
+        if (aimedItem == null || aimedItem.target() == ItemTarget.ENEMY) {
+            return battle.livingEnemies();
+        }
+        return aimedItem.target() == ItemTarget.FALLEN
+                ? battle.party().stream().filter(f -> !f.alive()).toList() : battle.livingParty();
+    }
+
+    /** What can still be used this round, after the orders already given. */
+    private List<Item> usableItems() {
+        return game.inventory().items().stream().filter(item -> item.usable() && left(item) > 0).toList();
+    }
+
+    private int left(Item item) {
+        int ordered = item.consumed()
+                ? (int) orders.stream().filter(o -> o.item() != null && o.item().id().equals(item.id())).count() : 0;
+        return game.inventory().count(item) - ordered;
     }
 
     /** A party member who was just hit, to flash in the party list; or null. */
@@ -186,6 +222,7 @@ final class BattleScreen {
         Fighter hero = battle.party().get(heroIndex);
         switch (menuIndex) {
             case 0 -> {
+                aimedItem = null;
                 List<Fighter> targets = battle.livingEnemies();
                 if (targets.size() == 1) {
                     orders.add(new Battle.Order(hero, Battle.Command.ATTACK, targets.get(0)));
@@ -200,9 +237,42 @@ final class BattleScreen {
                 orders.add(new Battle.Order(hero, Battle.Command.DEFEND, null));
                 nextHero();
             }
+            case 2 -> {
+                if (usableItems().isEmpty()) {
+                    caption = "There is nothing to use.";
+                } else {
+                    showItems();
+                }
+            }
             default -> {
                 orders.add(new Battle.Order(hero, Battle.Command.FLEE, null));
                 nextHero();
+            }
+        }
+    }
+
+    private void showItems() {
+        phase = Phase.ITEM;
+        itemIndex = Math.min(itemIndex, usableItems().size() - 1);
+        caption = "Use which item?";
+    }
+
+    private void chooseItem(Item item) {
+        Fighter hero = battle.party().get(heroIndex);
+        switch (item.target()) {
+            case SELF, PARTY, ENEMIES -> {
+                orders.add(new Battle.Order(hero, Battle.Command.ITEM, null, item));
+                nextHero();
+            }
+            case ALLY, FALLEN, ENEMY -> {
+                aimedItem = item;
+                if (targets().isEmpty()) {
+                    caption = "Nobody needs that.";
+                    return;
+                }
+                targetIndex = item.target() == ItemTarget.ALLY ? Math.max(0, targets().indexOf(hero)) : 0;
+                phase = Phase.TARGET;
+                caption = "Use the " + item.displayName() + " on whom?";
             }
         }
     }
@@ -233,6 +303,31 @@ final class BattleScreen {
             eventLength = length + 0.45;
             caption = attack.attacker().name() + " attacks " + attack.target().name() + "!";
             music.playEffect(animation == null ? null : animation.sound());
+        } else if (current instanceof BattleEvent.ItemUsed used) {
+            caption = used.actor().name() + " uses the " + used.item().displayName()
+                    + (used.target() == null || used.target() == used.actor() ? "." : " on " + used.target().name() + ".");
+            eventLength = TEXT_SECONDS;
+        } else if (current instanceof BattleEvent.Heal heal) {
+            caption = heal.target().name() + " recovers " + heal.amount() + (heal.mana() ? " MP." : " HP.");
+            popups.add(new Popup(heal.target(), "+" + heal.amount(), heal.mana() ? Hud.TEXT : Hud.GOOD, clock));
+            if (!heal.mana()) {
+                shownHp.put(heal.target(), shownHp(heal.target()) + heal.amount());
+            }
+            eventLength = TEXT_SECONDS;
+        } else if (current instanceof BattleEvent.Hurt hurt) {
+            hurt(hurt.target(), hurt.amount(), hurt.killed());
+            if (!hurt.killed() && !hurt.cause().isEmpty()) {
+                caption = hurt.target().name() + " takes " + hurt.amount() + " damage from " + hurt.cause() + ".";
+            }
+            eventLength = TEXT_SECONDS;
+        } else if (current instanceof BattleEvent.Revived revived) {
+            shownHp.put(revived.target(), revived.hp());
+            fallenAt.remove(revived.target());
+            caption = revived.target().name() + " is back on their feet!";
+            eventLength = TEXT_SECONDS;
+        } else if (current instanceof BattleEvent.Note note) {
+            caption = note.text();
+            eventLength = TEXT_SECONDS + 0.2;
         } else if (current instanceof BattleEvent.Defend defend) {
             caption = defend.actor().name() + " stands guard.";
             eventLength = TEXT_SECONDS;
@@ -270,23 +365,27 @@ final class BattleScreen {
     private void land(BattleEvent.Attack attack) {
         impactDone = true;
         Fighter target = attack.target();
-        shownHp.put(target, Math.max(0, shownHp(target) - attack.damage()));
         if (attack.missed()) {
             popups.add(new Popup(target, "Miss", Hud.DIM, clock));
             caption = attack.attacker().name() + " misses!";
             return;
         }
-        popups.add(new Popup(target, Integer.toString(attack.damage()), target.isEnemy() ? Hud.HIGHLIGHT : Hud.BAD, clock));
+        hurt(target, attack.damage(), attack.killed());
+    }
+
+    private void hurt(Fighter target, int damage, boolean killed) {
+        shownHp.put(target, Math.max(0, shownHp(target) - damage));
+        popups.add(new Popup(target, Integer.toString(damage), target.isEnemy() ? Hud.HIGHLIGHT : Hud.BAD, clock));
         if (!target.isEnemy()) {
             flashHero = target;
             flashUntil = clock + 0.45;
             shakeUntil = clock + 0.3;
         }
-        if (attack.killed()) {
+        if (killed) {
             fallenAt.put(target, clock);
             caption = target.name() + (target.isEnemy() ? " is defeated!" : " falls!");
         } else {
-            caption = target.name() + " takes " + attack.damage() + " damage.";
+            caption = target.name() + " takes " + damage + " damage.";
         }
     }
 
@@ -339,17 +438,35 @@ final class BattleScreen {
                     choose();
                 }
             }
-            case TARGET -> {
-                List<Fighter> targets = battle.livingEnemies();
-                if (left) {
-                    targetIndex = (targetIndex + targets.size() - 1) % targets.size();
-                } else if (right) {
-                    targetIndex = (targetIndex + 1) % targets.size();
+            case ITEM -> {
+                List<Item> items = usableItems();
+                if (up) {
+                    itemIndex = (itemIndex + items.size() - 1) % items.size();
+                } else if (down) {
+                    itemIndex = (itemIndex + 1) % items.size();
                 } else if (back) {
                     phase = Phase.COMMAND;
                     caption = battle.party().get(heroIndex).name() + ": what will you do?";
                 } else if (confirm) {
-                    orders.add(new Battle.Order(battle.party().get(heroIndex), Battle.Command.ATTACK, targets.get(targetIndex)));
+                    chooseItem(items.get(itemIndex));
+                }
+            }
+            case TARGET -> {
+                List<Fighter> targets = targets();
+                boolean previous = left || up;
+                boolean following = right || down;
+                if (previous) {
+                    targetIndex = (targetIndex + targets.size() - 1) % targets.size();
+                } else if (following) {
+                    targetIndex = (targetIndex + 1) % targets.size();
+                } else if (back && aimedItem != null) {
+                    showItems();
+                } else if (back) {
+                    phase = Phase.COMMAND;
+                    caption = battle.party().get(heroIndex).name() + ": what will you do?";
+                } else if (confirm) {
+                    orders.add(new Battle.Order(battle.party().get(heroIndex),
+                            aimedItem == null ? Battle.Command.ATTACK : Battle.Command.ITEM, targets.get(targetIndex), aimedItem));
                     nextHero();
                 }
             }
@@ -404,6 +521,8 @@ final class BattleScreen {
         drawCaption(graphics, view);
         if (phase == Phase.COMMAND || phase == Phase.TARGET) {
             drawCommands(graphics, view);
+        } else if (phase == Phase.ITEM) {
+            drawItems(graphics, view);
         } else if (phase == Phase.OUTCOME) {
             drawOutcome(graphics, view);
         }
@@ -416,8 +535,7 @@ final class BattleScreen {
         int left = view.x + (view.width - slot * count) / 2;
         int baseline = view.y + view.height - 190; // leaves room below for the command box
         int maxHeight = 200;
-        List<Fighter> targets = battle.livingEnemies();
-        Fighter targeted = phase == Phase.TARGET && !targets.isEmpty() ? targets.get(Math.min(targetIndex, targets.size() - 1)) : null;
+        Fighter targeted = targeted();
 
         for (int i = 0; i < count; i++) {
             Fighter enemy = enemies.get(i);
@@ -522,7 +640,7 @@ final class BattleScreen {
 
     private void drawCommands(Graphics2D g, Rectangle view) {
         Fighter hero = battle.party().get(heroIndex);
-        Rectangle box = new Rectangle(view.x + 24, view.y + view.height - 124, 230, 104);
+        Rectangle box = new Rectangle(view.x + 24, view.y + view.height - 144, 230, 126);
         Hud.panel(g, box);
         g.setFont(Hud.FONT);
         g.setColor(Hud.HIGHLIGHT);
@@ -530,12 +648,37 @@ final class BattleScreen {
         g.setFont(Hud.SMALL_FONT);
         for (int i = 0; i < COMMANDS.length; i++) {
             boolean selected = i == menuIndex;
-            boolean unavailable = i == 2 && !battle.canFlee();
+            boolean unavailable = (i == 3 && !battle.canFlee()) || (i == 2 && usableItems().isEmpty());
             g.setColor(unavailable ? Hud.DIM : selected ? Hud.HIGHLIGHT : Hud.TEXT);
             g.drawString((selected ? "> " : "  ") + COMMANDS[i], box.x + 12, box.y + 46 + i * 19);
         }
         g.setColor(Hud.DIM);
-        g.drawString(phase == Phase.TARGET ? "Left/Right, Enter" : "Esc: back", box.x + 120, box.y + box.height - 10);
+        g.drawString(phase == Phase.TARGET ? "Arrows, Enter" : "Esc: back", box.x + 120, box.y + box.height - 10);
+    }
+
+    private void drawItems(Graphics2D g, Rectangle view) {
+        List<Item> items = usableItems();
+        int rows = 5;
+        Rectangle box = new Rectangle(view.x + 24, view.y + view.height - 144, view.width - 48, 126);
+        Hud.panel(g, box);
+        g.setFont(Hud.SMALL_FONT);
+        int first = Math.max(0, Math.min(itemIndex - rows / 2, items.size() - rows));
+        for (int i = first; i < Math.min(items.size(), first + rows); i++) {
+            Item item = items.get(i);
+            g.setColor(i == itemIndex ? Hud.HIGHLIGHT : Hud.TEXT);
+            g.drawString(Hud.fit(g, (i == itemIndex ? "> " : "  ") + item.displayName(), 210), box.x + 12, box.y + 24 + (i - first) * 19);
+            g.drawString("x" + left(item), box.x + 228, box.y + 24 + (i - first) * 19);
+        }
+        Item selected = items.get(itemIndex);
+        g.setColor(Hud.DIM);
+        int y = box.y + 24;
+        for (String line : Hud.wrap(selected.target().displayName + "\n" + selected.description(), g.getFontMetrics(), box.width - 300)) {
+            if (y < box.y + box.height - 20) {
+                g.drawString(line, box.x + 286, y);
+            }
+            y += 19;
+        }
+        g.drawString("Esc: back", box.x + box.width - 84, box.y + box.height - 10);
     }
 
     private void drawOutcome(Graphics2D g, Rectangle view) {

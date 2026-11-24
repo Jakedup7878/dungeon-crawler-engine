@@ -1,6 +1,7 @@
 package crawler.editor;
 
 import crawler.core.CharacterClass;
+import crawler.core.Encounters;
 import crawler.core.PartyMember;
 
 import javax.swing.JComboBox;
@@ -18,6 +19,7 @@ final class PartyForm implements RosterDialog.Form<PartyMember> {
     private final JSpinner level = StatFields.spinner(1, 99);
     private final StatFields stats = new StatFields();
     private final ImagePicker portrait;
+    private final JTextField equipment = new JTextField(22);
     private final JComponent component;
 
     /** @param classes the project's classes (or the built-in ones), offered in the Class box */
@@ -25,12 +27,15 @@ final class PartyForm implements RosterDialog.Form<PartyMember> {
         characterClass = new JComboBox<>(classes.stream().map(CharacterClass::name).toArray(String[]::new));
         characterClass.setEditable(true); // pick one, or type your own
         portrait = new ImagePicker(assets, null, null, "No portrait yet");
+        equipment.setToolTipText("Ids of the items they start out wearing, comma separated.");
         List<JComponent> rows = new ArrayList<>(List.of(
                 new JLabel("Name"), name,
                 new JLabel("Class"), characterClass,
                 new JLabel("Level"), level));
         rows.addAll(List.of(stats.rows()));
-        rows.addAll(List.of(new JLabel("Portrait"), portrait));
+        rows.addAll(List.of(
+                new JLabel("Equipment"), equipment,
+                new JLabel("Portrait"), portrait));
         component = MapDialogs.form(rows.toArray(new JComponent[0]));
     }
 
@@ -46,12 +51,14 @@ final class PartyForm implements RosterDialog.Form<PartyMember> {
         level.setValue(member.level());
         stats.show(member.stats());
         portrait.set(member.portrait());
+        equipment.setText(String.join(", ", member.equipment()));
     }
 
     @Override
     public PartyMember read() {
         String typedClass = String.valueOf(characterClass.getEditor().getItem());
-        return new PartyMember(name.getText(), typedClass, StatFields.value(level), stats.read(), portrait.reference());
+        return new PartyMember(name.getText(), typedClass, StatFields.value(level), stats.read(), portrait.reference(),
+                Encounters.parseIds(equipment.getText()));
     }
 
     @Override

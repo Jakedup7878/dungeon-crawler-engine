@@ -5,10 +5,10 @@ import java.util.List;
 
 /**
  * Everything a game is made of apart from its maps: the project's settings, the ready-made
- * party, the classes, the kinds of enemy and the attack animations.
+ * party, the classes, the kinds of enemy, the attack animations and the items.
  */
 public record GameContent(ProjectSettings settings, List<PartyMember> party, List<CharacterClass> classes,
-                          List<EnemyType> enemies, List<AttackAnimation> animations) {
+                          List<EnemyType> enemies, List<AttackAnimation> animations, List<Item> items) {
     /** No project: default settings, the built-in classes, no enemies. */
     public static final GameContent EMPTY =
             new GameContent(ProjectSettings.DEFAULT, List.of(), List.of(), List.of(), List.of());
@@ -18,6 +18,13 @@ public record GameContent(ProjectSettings settings, List<PartyMember> party, Lis
         classes = List.copyOf(classes);
         enemies = List.copyOf(enemies);
         animations = List.copyOf(animations);
+        items = List.copyOf(items);
+    }
+
+    /** A game without items. */
+    public GameContent(ProjectSettings settings, List<PartyMember> party, List<CharacterClass> classes,
+                       List<EnemyType> enemies, List<AttackAnimation> animations) {
+        this(settings, party, classes, enemies, animations, List.of());
     }
 
     /** Reads everything from a project folder. */
@@ -31,7 +38,8 @@ public record GameContent(ProjectSettings settings, List<PartyMember> party, Lis
                 GameData.loadParty(files),
                 GameData.loadClasses(files),
                 GameData.loadEnemies(files),
-                GameData.loadAnimations(files));
+                GameData.loadAnimations(files),
+                GameData.loadItems(files));
     }
 
     /** The project's classes, or the built-in ones if it defines none. */
@@ -64,11 +72,16 @@ public record GameContent(ProjectSettings settings, List<PartyMember> party, Lis
 
     /** A level 1 member of a class. */
     public static PartyMember newMember(String name, CharacterClass characterClass) {
-        return new PartyMember(name, characterClass.name(), 1, characterClass.base(), characterClass.portrait());
+        return new PartyMember(name, characterClass.name(), 1, characterClass.base(), characterClass.portrait(),
+                characterClass.equipment());
     }
 
     public EnemyType enemy(String id) {
         return GameData.byId(enemies, EnemyType::id, id);
+    }
+
+    public Item item(String id) {
+        return GameData.byId(items, Item::id, id);
     }
 
     public AttackAnimation animation(String id) {

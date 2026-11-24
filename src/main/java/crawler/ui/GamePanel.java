@@ -92,6 +92,7 @@ public final class GamePanel extends JPanel {
     private int messagePages = 1;
     private BattleScreen battleScreen;
     private PartyCreationScreen creation;
+    private InventoryScreen inventory;
 
     /** A game drawn with the built-in look only (used by tests). */
     public GamePanel(Game game) {
@@ -120,6 +121,7 @@ public final class GamePanel extends JPanel {
         input.bindCommand(() -> revealMap = !revealMap, KeyEvent.VK_M);
         input.bindCommand(this::toggleSmoothMovement, KeyEvent.VK_F);
         input.bindCommand(this::toggleSound, KeyEvent.VK_V);
+        input.bindCommand(this::openInventory, KeyEvent.VK_I, KeyEvent.VK_TAB);
         input.bindCommand(() -> game.interact(), KeyEvent.VK_SPACE, KeyEvent.VK_ENTER);
         addKeyListener(new KeyAdapter() {
             @Override
@@ -166,6 +168,7 @@ public final class GamePanel extends JPanel {
         camera.snapTo(game.party());
         walkableCells = countWalkable(game.map());
         battleScreen = null;
+        inventory = null;
         creation = offerPartyCreation && game.content().settings().partyCreation()
                 ? new PartyCreationScreen(game.content(), assets, party -> {
                     game.replaceParty(party);
@@ -206,12 +209,26 @@ public final class GamePanel extends JPanel {
             }
         } else if (battleScreen != null) {
             battleScreen.keyPressed(e);
+            e.consume(); // Esc goes back; it mustn't also close a play test's window
+        } else if (inventory != null) {
+            inventory.keyPressed(e);
+            e.consume();
+            if (inventory.isFinished()) {
+                inventory = null;
+            }
         } else if (game.isGameOver()) {
             if (confirm) {
                 restart();
             }
         } else {
             input.keyPressed(e);
+        }
+    }
+
+    private void openInventory() {
+        if (!camera.isAnimating()) {
+            inventory = new InventoryScreen(game, looks);
+            input.cancelRepeat();
         }
     }
 
@@ -236,7 +253,7 @@ public final class GamePanel extends JPanel {
             music.play(game.isGameOver() ? null : game.map().music());
         }
 
-        boolean busy = creation != null || battleScreen != null || game.battle() != null
+        boolean busy = creation != null || inventory != null || battleScreen != null || game.battle() != null
                 || game.isGameOver() || game.message() != null;
         if (busy) {
             input.poll(); // movement keys do nothing meanwhile
@@ -309,7 +326,11 @@ public final class GamePanel extends JPanel {
             if (battleScreen != null) {
                 battleScreen.draw(g, VIEW);
             } else {
-                drawCompass(g);
+                if (inventory == null) {
+                    drawCompass(g);
+                } else {
+                    inventory.draw(g, VIEW, clock);
+                }
                 if (game.isGameOver()) {
                     drawGameOver(g);
                 }
@@ -404,6 +425,7 @@ public final class GamePanel extends JPanel {
                 {"E / Right", "Turn right"},
                 {"X", "Turn around"},
                 {"Space", "Open / talk"},
+                {"I", "Items / equipment"},
                 {"M", "Reveal map: " + (revealMap ? "on" : "off")},
                 {"F", "Smooth: " + (smoothMovement ? "on" : "off")},
                 {"V", "Sound: " + (music.isMuted() ? "off" : "on")},
@@ -416,7 +438,7 @@ public final class GamePanel extends JPanel {
             g.drawString(row[0], x, y);
             g.setColor(TEXT);
             g.drawString(row[1], x + 104, y);
-            y += 17;
+            y += rows.length > 10 ? 16 : 17;
         }
     }
 
@@ -494,7 +516,9 @@ public final class GamePanel extends JPanel {
         g.fill(PARTY_AREA);
         drawFrame(g, PARTY_AREA);
         List<Fighter> heroes = game.heroes();
-        Fighter active = battleScreen == null ? null : battleScreen.activeHero();
+        Fighter active = battleScreen != null ? battleScreen.activeHero()
+                : inventory != null ? inventory.selectedHero() : null;
+        Fighter targeted = battleScreen == null ? null : battleScreen.targetedHero();
         Fighter hurt = battleScreen == null ? null : battleScreen.hurtHero();
         int rowHeight = Math.min(18, (PARTY_AREA.height - 6) / Math.max(1, heroes.size()));
         int y = PARTY_AREA.y + 4;
@@ -503,6 +527,9 @@ public final class GamePanel extends JPanel {
             int hp = battleScreen != null ? battleScreen.shownHp(hero) : hero.hp();
             if (hero == hurt) {
                 g.setColor(new Color(160, 20, 20, 140));
+                g.fillRect(PARTY_AREA.x + 2, y, PARTY_AREA.width - 4, rowHeight);
+            } else if (hero == targeted) {
+                g.setColor(new Color(110, 210, 120, 110));
                 g.fillRect(PARTY_AREA.x + 2, y, PARTY_AREA.width - 4, rowHeight);
             } else if (hero == active) {
                 g.setColor(new Color(255, 214, 92, 40));

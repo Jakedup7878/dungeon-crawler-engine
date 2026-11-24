@@ -33,6 +33,7 @@ battles, an NPC, a chest, an event, and a boss behind the closet door.
 | X               | Turn around                    |                              |
 | Space / Enter   | Open or talk to what's in front; next page / close a message | Confirm; hurry the animations |
 | Esc / Backspace |                                | Back to the previous member  |
+| I / Tab         | Items and equipment            |                              |
 | M               | Reveal the whole automap (debug) |                            |
 | F               | Smooth movement on / off       |                              |
 | V               | Sound on / off                 | Sound on / off               |
@@ -44,12 +45,23 @@ Tap a key for one step. Hold it to keep walking. Walking into a wall bumps once 
 Random battles happen as you walk (each map sets how often and which enemies), and an event can start a fixed battle,
 such as a boss, that can't be run from. Battles are turn-based, Wizardry style:
 
-1. Each party member gets an order: **Attack** (choose a target), **Defend** (half damage this round) or **Flee**.
+1. Each party member gets an order: **Attack** (choose a target), **Defend** (half damage this round), **Item** or **Flee**.
 2. Everyone acts, fastest first. Each attack plays its **attack animation** and sound over whoever is hit.
 3. Winning shares **experience** among the survivors and adds **gold**. Enough experience raises a member's level,
    adding their class's growth to their stats. If the whole party falls, it's game over; Enter starts again.
 
 Damage is attack x (85% to 115%) minus half the target's defense, at least 1. The rules are in `crawler.battle.Battle`.
+
+## Items
+
+The party carries items (up to 99 of each) and wears a weapon, shield, helmet, body armor and accessory. Press **I** to
+use and equip things; in battle, use them with **Item**. Make your own in the editor, **Project > Items**: potions,
+weapons, armor, accessories and key items, with stat bonuses, who can equip them, a picture, an attack animation, and a
+**script** for whatever else they do: heal, revive, poison, stun, burn, drain, thorns, boosts and so on. The script
+language is explained in [docs/item-scripts.md](docs/item-scripts.md).
+
+The party gets items from chests, from **Starting items** in Project Settings, and from the **Equipment** of classes and
+party members.
 
 ## Map editor
 
@@ -90,10 +102,11 @@ With the Event, Chest or NPC tool, click an object to edit it, or drag it to ano
 
 | Item | What you set |
 |------|--------------|
-| **Settings** | Game name; whether players **create their own party**, and its size; starting gold; the default **NPC look** (instead of the spinning top) and chest looks; **battle music** and **victory music** |
+| **Settings** | Game name; whether players **create their own party**, and its size; starting gold and **items**; the default **NPC look** (instead of the spinning top) and chest looks; **battle music** and **victory music** |
 | **Party Members** | The ready-made party: name, class, level, stats, portrait |
 | **Classes** | Fighter, Mage...: starting stats, **growth per level**, attack animation, portrait. With none, the game uses Fighter, Mage, Priest and Thief |
 | **Enemies** | Name, id, stats, experience, gold, **picture** (still or animated) and **attack animation** |
+| **Items** | Potions, weapons, armor, accessories and key items, each with a [script](docs/item-scripts.md) |
 | **Attack Animations** | An animation strip, its size and a **sound**, with a live preview |
 | **Publish Game** | Makes the game into a program players can run, with its files encrypted (see below) |
 
@@ -121,6 +134,7 @@ My Game/
   party.txt        the ready-made party        (Project > Party Members)
   classes.txt      the classes                 (Project > Classes)
   enemies.txt      the kinds of enemy          (Project > Enemies)
+  items.txt        the items and their scripts (Project > Items)
   animations.txt   the attack animations       (Project > Attack Animations)
 ```
 
@@ -204,6 +218,7 @@ sprite = assets/old-man.png, 4 frames, 6 fps
 [chest 0,0]
 name = Dusty chest
 contents = A rusty key
+items = potion x2, iron-sword
 sprite = assets/chest.png
 opened = assets/chest-open.png
 
@@ -218,7 +233,7 @@ Cells are `x,y` from the top-left (0,0), and `\n` in text starts a new line. A p
 by `, N frames, F fps` for an animation strip. Paths are relative to the project folder (or, for a map outside any
 project, to the map file).
 
-`party.txt`, `classes.txt`, `enemies.txt` and `animations.txt` use the same `[section]` and `key = value` style;
+`party.txt`, `classes.txt`, `enemies.txt`, `items.txt` and `animations.txt` use the same `[section]` and `key = value` style;
 open the sample project's files to see them. Mistakes in any of these files are reported with the file and line.
 
 ## Tests
@@ -236,6 +251,7 @@ the test classes with "Battle" in their name.
 | `crawler.core`   | Pure game logic and file formats, no Swing. `DungeonMap` (cells + shared edges, textures, objects, music, `Encounters`), `MapObject` / `ObjectType`, `SpriteRef`, `Surface`, `Direction`, `Party`, `MovementSystem`, `MoveAction` / `MoveResult`, `Exploration`, `MapLoader` / `MapWriter`, `Reachability`, `GameProject` / `ProjectSettings`, `PartyMember` / `CharacterClass` / `EnemyType` / `AttackAnimation` / `Stats`, `GameData` / `SectionFile` / `GameContent`, `ProjectFiles` (a project's files in a folder, a pack or the classpath), `GamePack` (encrypted game packs). |
 | `crawler.publish` | `Publisher` (makes a game program from a template plus the encrypted pack) and `PublishTool` (the same from the command line, for `publish.ps1`). |
 | `crawler.battle` | The battle rules, no Swing: `Battle` (rounds, turn order, damage, fleeing, rewards), `Fighter` (HP, levels), `BattleEvent`. |
+| `crawler.script` | The item script language: `Script` and `ScriptParser`. It knows nothing of the game; `Effects` in `crawler.battle` carries out its commands. |
 | `crawler.audio`  | `MusicPlayer` (looping music and sound effects, WAV through a Clip and MIDI through the Sequencer) and `AudioFiles` (checking files). Sound never stops the game: problems are logged and it stays quiet. |
 | `crawler.render` | `DungeonRenderer` (raycaster for thin walls plus billboard sprites, rendered at 320x240 and scaled up), `Camera`, `Textures`, `Sprite` (stills and animation strips) / `ObjectLooks` / `DefaultSprites` (how everything looks), `AssetSource` (where a game's files come from), `AutomapRenderer`. |
 | `crawler.game`   | `Game` ties the map, party and systems together: chests, NPCs, events, encounters, gold; `GameMessage`, `MessageLog`. |
@@ -248,7 +264,8 @@ Battles work the same way: `Battle.playRound` decides everything at once, and `B
 
 ## Where to extend
 
-- **More battle commands** (spells, items): a new `Battle.Command`, what it does in `Battle.playRound`, a
+- **More script commands**: add it to `ScriptParser.COMMANDS` and to `Effects.apply`.
+- **More battle commands** (spells): a new `Battle.Command`, what it does in `Battle.playRound`, a
   `BattleEvent` for it, and a line in `BattleScreen` (its menu and how the event is shown).
 - **Smarter enemies**: enemies pick a random target in `Battle.playRound`; give `EnemyType` a behaviour and use it there.
 - **New wall types** (locked doors, secret doors, one-way walls): add a constant to `EdgeType` with its

@@ -1,0 +1,59 @@
+; The items in the game. hp, mp, attack, defense and speed are bonuses while equipped.
+; script says what the item does; \n in it starts a new line. Paths are relative to the project folder.
+
+[item potion]
+name = Potion
+kind = consumable
+description = Heals 20 HP.
+target = ally
+script = on use\n  heal target 20
+
+[item antidote]
+name = Antidote
+kind = consumable
+description = Cures poison and stun.
+target = ally
+script = on use\n  cure target
+
+[item phoenix-feather]
+name = Phoenix Feather
+kind = consumable
+description = Brings back a fallen member with half their HP.
+target = fallen
+script = on use\n  revive target target.maxhp / 2
+
+[item fire-flask]
+name = Fire Flask
+kind = consumable
+description = Burns every enemy.
+target = enemies
+script = on use\n  say "The {item} bursts into flame!"\n  damage enemies random(8, 14)
+
+[item iron-sword]
+name = Iron Sword
+kind = weapon
+description = Plain and sharp.
+attack = 3
+classes = fighter, thief
+
+[item ember-blade]
+name = Ember Blade
+kind = weapon
+description = Sometimes sets what it hits alight.
+attack = 4
+classes = fighter, thief
+script = # A chance of extra fire damage\non hit\n  if chance(35) and target.alive\n    say "Embers swirl around {target}!"\n    damage target 4 + user.level\n  end
+
+[item leather-armor]
+name = Leather Armor
+kind = body
+defense = 2
+
+[item thorn-mail]
+name = Thorn Mail
+kind = body
+description = Hurts whoever hits its wearer.
+defense = 4
+speed = -1
+classes = fighter, priest
+script = on hurt\n  damage target 1 + damage / 4

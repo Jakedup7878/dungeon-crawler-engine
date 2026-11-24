@@ -2,9 +2,16 @@ package crawler.battle;
 
 import crawler.core.CharacterClass;
 import crawler.core.EnemyType;
+import crawler.core.Item;
+import crawler.core.ItemKind;
 import crawler.core.PartyMember;
 import crawler.core.SpriteRef;
 import crawler.core.Stats;
+
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Someone taking part in battles: a party member, who keeps their HP, experience and level
@@ -29,6 +36,25 @@ public final class Fighter {
     private int hp;
     private int mp;
     private boolean defending;
+    private CharacterClass heroClass;
+    private final Map<ItemKind, Item> equipment = new EnumMap<>(ItemKind.class);
+    private int poisonDamage;
+    private int poisonRounds;
+    private int stunTurns;
+    private final List<Boost> boosts = new ArrayList<>();
+
+    /** A change to a stat that wears off at the end of a battle, if not before. */
+    private static final class Boost {
+        final String stat;
+        final int amount;
+        int rounds;
+
+        Boost(String stat, int amount, int rounds) {
+            this.stat = stat;
+            this.amount = amount;
+            this.rounds = rounds;
+        }
+    }
 
     private Fighter(String name, boolean enemy, String characterClass, String attackAnimation, SpriteRef sprite,
                     String portrait, Stats growth, String enemyId, int expReward, int goldReward, int level, Stats stats) {
@@ -58,8 +84,10 @@ public final class Fighter {
         String animation = characterClass == null ? null : characterClass.attackAnimation();
         String portrait = member.portrait() != null ? member.portrait()
                 : characterClass == null ? null : characterClass.portrait();
-        return new Fighter(member.name(), false, member.characterClass(), animation, null, portrait, growth,
+        Fighter hero = new Fighter(member.name(), false, member.characterClass(), animation, null, portrait, growth,
                 null, 0, 0, member.level(), member.stats());
+        hero.heroClass = characterClass;
+        return hero;
     }
 
     /** An enemy at full health, shown under {@code name} (such as "Blue Slime B"). */
@@ -81,9 +109,10 @@ public final class Fighter {
         return characterClass;
     }
 
-    /** Id of the attack animation, or null for the built-in one. */
+    /** Id of the attack animation (the weapon's, if it has one), or null for the built-in one. */
     public String attackAnimation() {
-        return attackAnimation;
+        Item weapon = equipment.get(ItemKind.WEAPON);
+        return weapon != null && weapon.animation() != null ? weapon.animation() : attackAnimation;
     }
 
     /** An enemy's picture, or null for the built-in look. */
@@ -117,9 +146,161 @@ public final class Fighter {
         return exp;
     }
 
-    /** Maximum HP and MP, and the other numbers. */
+    /** Maximum HP and MP, and the other numbers, counting equipment and boosts. */
     public Stats stats() {
-        return stats;
+        if (equipment.isEmpty() && boosts.isEmpty()) {
+            return stats;
+        }
+        int hpMore = 0;
+        int mpMore = 0;
+        int attack = 0;
+        int defense = 0;
+        int speed = 0;
+        for (Boost b : boosts) {
+            switch (b.stat) {
+                case "attack" -> attack += b.amount;
+                case "defense" -> defense += b.amount;
+                default -> speed += b.amount;
+            }
+        }
+        for (Item item : equipment.values()) {
+            hpMore += item.bonus().hp();
+            mpMore += item.bonus().mp();
+            attack += item.bonus().attack();
+            defense += item.bonus().defense();
+            speed += item.bonus().speed();
+        }
+        return new Stats(clamp(stats.hp() + hpMore, 1, Stats.MAX_POINTS), clamp(stats.mp() + mpMore, 0, Stats.MAX_POINTS),
+                clamp(stats.attack() + attack, 0, Stats.MAX_RATING), clamp(stats.defense() + defense, 0, Stats.MAX_RATING),
+                clamp(stats.speed() + speed, 0, Stats.MAX_RATING));
+    }
+
+    private static int clamp(int n, int min, int max) {
+        return Math.max(min, Math.min(max, n));
+    }
+
+    // ------------------------------------------------------------ equipment
+
+    /** What they wear in a slot, or null. */
+    public Item equipped(ItemKind slot) {
+        return equipment.get(slot);
+    }
+
+    /** Everything they wear. */
+    public List<Item> equipment() {
+        return new ArrayList<>(equipment.values());
+    }
+
+    public boolean canEquip(Item item) {
+        return !enemy && item.equippableBy(characterClass, heroClass);
+    }
+
+    /** Puts an item on (check {@link #canEquip} first); returns what was in that slot, or null. */
+    public Item equip(Item item) {
+        if (!canEquip(item)) {
+            throw new IllegalArgumentException(name + " can't equip " + item.displayName());
+        }
+        Item before = equipment.put(item.kind(), item);
+        keepWithinLimits();
+        return before;
+    }
+
+    /** Takes off what's in a slot; returns it, or null. */
+    public Item unequip(ItemKind slot) {
+        Item before = equipment.remove(slot);
+        keepWithinLimits();
+        return before;
+    }
+
+    private void keepWithinLimits() {
+        hp = Math.min(hp, stats().hp());
+        mp = Math.min(mp, stats().mp());
+    }
+
+    // ------------------------------------------------------------ what items do
+
+    /** Gives back HP; returns how much. */
+    int heal(int amount) {
+        int before = hp;
+        hp = Math.max(hp, Math.min(stats().hp(), hp + Math.max(0, amount)));
+        return hp - before;
+    }
+
+    /** Gives back MP, or takes it if negative; returns the change. */
+    int restoreMp(int amount) {
+        int before = mp;
+        mp = clamp(mp + amount, 0, Math.max(mp, stats().mp()));
+        return mp - before;
+    }
+
+    /** Brings a fallen fighter back, with at least 1 HP; returns their HP. */
+    int revive(int amount) {
+        clearConditions();
+        hp = clamp(amount, 1, stats().hp());
+        return hp;
+    }
+
+    void poison(int damage, int rounds) {
+        poisonDamage = Math.max(poisonDamage, damage);
+        poisonRounds = Math.max(poisonRounds, rounds);
+    }
+
+    public boolean poisoned() {
+        return poisonRounds > 0;
+    }
+
+    /** Poison at the end of a round: the damage done (0 if not poisoned). */
+    int tickPoison() {
+        if (poisonRounds <= 0 || !alive()) {
+            return 0;
+        }
+        int amount = Math.min(hp, poisonDamage);
+        takeDamage(amount);
+        if (--poisonRounds == 0) {
+            poisonDamage = 0;
+        }
+        return amount;
+    }
+
+    void stun(int turns) {
+        stunTurns = Math.max(stunTurns, turns);
+    }
+
+    public boolean stunned() {
+        return stunTurns > 0;
+    }
+
+    /** Uses up one stunned turn; false if they can act. */
+    boolean loseTurn() {
+        if (stunTurns <= 0) {
+            return false;
+        }
+        stunTurns--;
+        return true;
+    }
+
+    void cure() {
+        poisonDamage = 0;
+        poisonRounds = 0;
+        stunTurns = 0;
+    }
+
+    void boost(String stat, int amount, int rounds) {
+        boosts.add(new Boost(stat, amount, rounds));
+    }
+
+    /** Boosts wear down by a round. */
+    void tickBoosts() {
+        for (Boost b : boosts) {
+            b.rounds--;
+        }
+        boosts.removeIf(b -> b.rounds <= 0);
+    }
+
+    /** Back to normal: no poison, stun or boosts. */
+    void clearConditions() {
+        cure();
+        boosts.clear();
     }
 
     public int hp() {
@@ -163,8 +344,8 @@ public final class Fighter {
         while (level < MAX_LEVEL && exp >= expForNextLevel()) {
             level++;
             stats = stats.plus(growth);
-            hp = Math.min(stats.hp(), hp + growth.hp());
-            mp = Math.min(stats.mp(), mp + growth.mp());
+            hp = Math.min(stats().hp(), hp + growth.hp());
+            mp = Math.min(stats().mp(), mp + growth.mp());
             gained++;
         }
         return gained;
@@ -172,12 +353,12 @@ public final class Fighter {
 
     /** Back to full HP and MP. */
     public void restore() {
-        hp = stats.hp();
-        mp = stats.mp();
+        hp = stats().hp();
+        mp = stats().mp();
     }
 
     @Override
     public String toString() {
-        return name + " (" + hp + "/" + stats.hp() + " HP)";
+        return name + " (" + hp + "/" + stats().hp() + " HP)";
     }
 }

@@ -136,7 +136,8 @@ final class MapDialogs {
                 <h3>The rest of the game</h3>
                 <p>The <b>Project</b> menu holds what belongs to the whole game: <b>Settings</b> (party creation,
                 starting gold, the default NPC and chest looks, battle and victory music), <b>Party Members</b>,
-                <b>Classes</b>, <b>Enemies</b> and <b>Attack Animations</b>. For an animation, put the frames side by side
+                <b>Classes</b>, <b>Enemies</b>, <b>Items</b> (potions, weapons and armor, with scripts of their own)
+                and <b>Attack Animations</b>. For an animation, put the frames side by side
                 in one image and set <b>Frames</b>.</p>
                 <h3>Getting around</h3>
                 <table cellpadding='2'>

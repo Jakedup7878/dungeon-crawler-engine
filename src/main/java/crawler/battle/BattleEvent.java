@@ -1,5 +1,7 @@
 package crawler.battle;
 
+import crawler.core.Item;
+
 import java.util.List;
 
 /**
@@ -19,6 +21,26 @@ public sealed interface BattleEvent {
      * @param killed whether the target fell
      */
     record Attack(Fighter attacker, Fighter target, int damage, boolean missed, boolean killed) implements BattleEvent {
+    }
+
+    /** A party member uses an item; what it does follows. {@code target} may be null. */
+    record ItemUsed(Fighter actor, Item item, Fighter target) implements BattleEvent {
+    }
+
+    /** HP (or MP) given back. */
+    record Heal(Fighter target, int amount, boolean mana) implements BattleEvent {
+    }
+
+    /** Damage from something other than an attack: an item's script, or poison ({@code cause}, or ""). */
+    record Hurt(Fighter target, int amount, String cause, boolean killed) implements BattleEvent {
+    }
+
+    /** A fallen fighter is back, with some HP. */
+    record Revived(Fighter target, int hp) implements BattleEvent {
+    }
+
+    /** A line of text. */
+    record Note(String text) implements BattleEvent {
     }
 
     /** The party tried to run and couldn't. */
